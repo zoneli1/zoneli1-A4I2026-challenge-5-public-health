@@ -52,6 +52,14 @@ def test_evidence_tools_and_audit_loop() -> None:
     assert access["access_summary"]["total_tracts"] == 326
     assert access["federal_hpsa_findings"]["shortage_areas_count"] == 0
     assert access["federal_hpsa_findings"]["shortage_facilities_count"] == 6
+    assert (
+        access["synthetic_shortage_tracts_findings"]["summary"]["synthetic_shortage_areas_count"]
+        == 93
+    )
+    assert (
+        access["synthetic_shortage_tracts_findings"]["summary"]["max_synthetic_shortage_score"]
+        == 83.1
+    )
     assert len(access["limited_capacity_or_restricted_sites_in_care_sites"]) > 0
 
     context = analyze_regional_context_and_surveillance("13121", ctx)
@@ -66,10 +74,11 @@ def test_evidence_tools_and_audit_loop() -> None:
     p1_ids = [s["geo_id"] for s in p1["selected_stops"]]
     assert p1_ids == ["13121011431", "13121011421", "13121011430", "13121011432"]
 
-    # Audit Pass 1 -> Must REJECT
+    # Audit Pass 1 -> Must REJECT (including synthetic_shortage_tracts cross-border check)
     a1 = audit_candidate_plan(tool_context=ctx)
     assert a1["verdict"] == "REJECT"
     assert a1["violations_count"] >= 3
+    assert any(v["type"] == "CROSS_BORDER_EDGE_ARTIFACT" for v in a1["violations"])
     assert ctx.actions.escalate is False
     assert ctx.state["audit_verdict"] == "REJECT"
 
@@ -79,12 +88,23 @@ def test_evidence_tools_and_audit_loop() -> None:
     p2_ids = [s["geo_id"] for s in p2["selected_stops"]]
     assert p2_ids == ["13121007603", "13121010214", "13121007400", "13121002300"]
     assert set(p1_ids).isdisjoint(set(p2_ids))
+    assert len(p2["runner_up_tracts_not_selected"]) >= 4
+    # Verify synthetic_shortage_tracts metrics are present on Pass 2 stops
+    stop2_metrics = next(s for s in p2["selected_stops"] if s["geo_id"] == "13121010214")["metrics"]
+    assert stop2_metrics["synthetic_shortage_score"] == 83.1
+    assert stop2_metrics["is_synthetic_shortage_area"] is True
 
-    # Audit Pass 2 -> Must APPROVE and escalate out of LoopAgent
+    # Audit Pass 2 -> Must APPROVE and escalate
     a2 = audit_candidate_plan(tool_context=ctx)
     assert a2["verdict"] == "APPROVE"
     assert a2["violations"] == []
     assert ctx.actions.escalate is True
+    assert (
+        a2["post_hoc_equity_and_demographic_audit"]["plan_vs_county_baseline"][
+            "plan_selected_synthetic_shortage_areas_count"
+        ]
+        == 3
+    )
     assert (
         a2["post_hoc_equity_and_demographic_audit"]["plan_vs_county_baseline"][
             "plan_weighted_pct_minority"

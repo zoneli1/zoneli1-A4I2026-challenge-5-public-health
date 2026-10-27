@@ -384,6 +384,7 @@ def analyze_burden_and_barriers(
     result = clean_json(result)
     if tool_context is not None:
         tool_context.state["burden_metrics"] = result
+        tool_context.state["burden_evidence"] = result
     return result
 
 
@@ -392,7 +393,7 @@ def analyze_spatial_access_and_shortages(
     geo_id: str | None = None,
     tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
-    """Query `tract_access`, `care_sites`, `care_sites_state`, `shortage_areas`, and `shortage_facilities`.
+    """Query `tract_access`, `care_sites`, `care_sites_state`, `shortage_areas`, `shortage_facilities`, and `synthetic_shortage_tracts`.
 
     Identifies safety-net deserts, part-time/school-based/mobile clinic traps in `care_sites`,
     cross-county border clinic proximity in `care_sites_state`, and the federal HPSA status.
@@ -485,6 +486,42 @@ def analyze_spatial_access_and_shortages(
         """
     )
 
+    synth_summary_sql = f"""
+    SELECT
+      COUNT(*) AS total_tracts_scored,
+      COUNTIF(is_synthetic_shortage_area = TRUE) AS synthetic_shortage_areas_count,
+      COUNTIF(not_near_safety_net = TRUE) AS not_near_safety_net_count,
+      COUNTIF(not_near_shortage_facility = TRUE) AS not_near_shortage_facility_count,
+      COUNTIF(has_closer_cross_border_clinic = TRUE) AS closer_cross_border_clinic_count,
+      ROUND(AVG(synthetic_shortage_score), 2) AS mean_synthetic_shortage_score,
+      ROUND(MAX(synthetic_shortage_score), 2) AS max_synthetic_shortage_score
+    FROM {T}.synthetic_shortage_tracts
+    WHERE STARTS_WITH(geo_id, '{county_fips}')
+    """
+    synth_summary = run_bq_query(synth_summary_sql).iloc[0].to_dict()
+
+    synth_top_sql = f"""
+    SELECT
+      s.geo_id,
+      d.corridor_name,
+      s.total_pop,
+      ROUND(s.synthetic_shortage_score, 2) AS synthetic_shortage_score,
+      s.is_synthetic_shortage_area,
+      s.not_near_safety_net,
+      s.not_near_shortage_facility,
+      ROUND(s.km_to_shortage_facility, 2) AS km_to_shortage_facility,
+      s.has_closer_cross_border_clinic,
+      ROUND(s.border_km_saved_statewide, 2) AS border_km_saved_statewide,
+      s.nearest_state_safety_net_name
+    FROM {T}.synthetic_shortage_tracts s
+    LEFT JOIN {T}.audit_tract_diagnostics d USING (geo_id)
+    WHERE STARTS_WITH(s.geo_id, '{county_fips}')
+      AND s.total_pop >= 1200
+    ORDER BY s.synthetic_shortage_score DESC
+    LIMIT 10
+    """
+    synth_top_tracts = run_bq_query(synth_top_sql).to_dict(orient="records")
+
     cross_border_sql = f"""
     SELECT
       geo_id,
@@ -502,17 +539,18 @@ def analyze_spatial_access_and_shortages(
     cross_border_tracts = run_bq_query(cross_border_sql).to_dict(orient="records")
 
     result = {
-        "layer_name": "tract_access, care_sites, care_sites_state, shortage_areas, shortage_facilities",
-        "true_spatial_grain": "Tract centroid-to-facility point great-circle distance (km) + facility points",
+        "layer_name": "tract_access, care_sites, care_sites_state, shortage_areas, shortage_facilities, synthetic_shortage_tracts",
+        "true_spatial_grain": "Tract centroid-to-facility point great-circle distance (km) + facility points + tract-level synthetic shortage index",
         "access_summary": acc_summary,
         "care_sites_breakdown": site_breakdown,
         "limited_capacity_or_restricted_sites_in_care_sites": constrained_sites,
         "cross_county_border_findings": {
             "explanation": (
                 "`care_sites` stops at the Fulton County border (`13121`). Checking `care_sites_state` "
-                "(1,133 Georgia sites) reveals that North Fulton border tracts reading 22-28.6 km from a "
-                "Fulton safety-net clinic are actually 7.1-12.8 km from FQHCs across the county line in "
-                "Duluth (Gwinnett), Lawrenceville, or Cumming (Forsyth)."
+                "(1,133 Georgia sites) and `synthetic_shortage_tracts` (`has_closer_cross_border_clinic`) "
+                "reveals that 53 North Fulton border tracts reading 22-28.6 km from a Fulton safety-net "
+                "clinic are actually 7.1-12.8 km from FQHCs across the county line in Duluth (Gwinnett), "
+                "Lawrenceville, or Cumming (Forsyth)."
             ),
             "examples": cross_border_tracts,
         },
@@ -537,6 +575,7 @@ def analyze_spatial_access_and_shortages(
     result = clean_json(result)
     if tool_context is not None:
         tool_context.state["access_metrics"] = result
+        tool_context.state["access_evidence"] = result
     return result
 
 
@@ -666,6 +705,7 @@ def analyze_regional_context_and_surveillance(
     result = clean_json(result)
     if tool_context is not None:
         tool_context.state["context_metrics"] = result
+        tool_context.state["regional_context"] = result
     return result
 
 
@@ -675,6 +715,8 @@ def rank_candidate_tracts(
     penalize_part_time_clinics: bool = False,
     exclude_cross_border_artifacts: bool = False,
     include_field_reports: bool = False,
+    county_fips: str = "13121",
+    pass_mode: str | None = None,
     tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Rank Fulton County census tracts to select 4 Saturday mobile clinic stops.
@@ -682,6 +724,9 @@ def rank_candidate_tracts(
     IMPORTANT GOVERNANCE & RESOLUTION RULES:
     - Blinded to race/ethnicity: Never queries SVI Theme 3 or ACS racial columns.
     - Refuses to use `mean_pm` (12 km grid) or `disease_weekly` (4-county HSA) as tract weights.
+    - Integrates `a4i_health.synthetic_shortage_tracts` (`synthetic_shortage_score`,
+      `is_synthetic_shortage_area`, `not_near_safety_net`, `not_near_shortage_facility`,
+      `has_closer_cross_border_clinic`) to bridge the 0-row federal `shortage_areas` vacuum.
     - Automatically executes Pass 1 (`pass1_naive_access`) on the initial pass when no prior
       `audit_verdict == 'REJECT'` exists in `session.state`, and switches to Pass 2
       (`pass2_audited_composite`) once the Clinical Rigor & Equity Auditor rejects Pass 1.
@@ -693,7 +738,9 @@ def rank_candidate_tracts(
         audit_feedback = tool_context.state.get("audit_feedback")
 
     # Determine whether this is Pass 1 (naive first proposal) or Pass 2 (post-rejection revision)
-    if strategy == "auto":
+    if pass_mode in ("pass1_naive_access", "pass2_audited_composite") and strategy == "auto":
+        effective_strategy = pass_mode
+    elif strategy == "auto":
         if prior_verdict == "REJECT" or min_inter_stop_km >= 3.0 or penalize_part_time_clinics:
             effective_strategy = "pass2_audited_composite"
         else:
@@ -708,9 +755,9 @@ def rank_candidate_tracts(
         include_field_reports = True
 
     T = f"`{PROJECT_ID}.{DATASET_ID}`"
-    # Note: We join ONLY non-demographic operational columns (clinic hours/border distances and
-    # nurse practitioner field reports) when in Pass 2. Race/ethnicity (SVI Theme 3) is NEVER
-    # queried here.
+    # Note: We join `synthetic_shortage_tracts`, `audit_tract_diagnostics` (ONLY non-demographic
+    # operational columns: clinic hours/border distances), and `field_reports`. Race/ethnicity
+    # (SVI Theme 3) is NEVER queried here.
     sql = f"""
     WITH active_reports AS (
       SELECT
@@ -749,6 +796,14 @@ def rank_candidate_tracts(
       ROUND(a.km_to_any_care, 2) AS km_to_any_care,
       ROUND(a.km_to_safety_net, 2) AS km_to_safety_net,
       ROUND(a.extra_km_if_uninsured, 2) AS extra_km_if_uninsured,
+      ROUND(s.synthetic_shortage_score, 2) AS synthetic_shortage_score,
+      COALESCE(s.is_synthetic_shortage_area, FALSE) AS is_synthetic_shortage_area,
+      COALESCE(s.not_near_safety_net, FALSE) AS not_near_safety_net,
+      COALESCE(s.not_near_shortage_facility, FALSE) AS not_near_shortage_facility,
+      ROUND(s.km_to_shortage_facility, 2) AS km_to_shortage_facility,
+      COALESCE(s.has_closer_cross_border_clinic, FALSE) AS has_closer_cross_border_clinic,
+      ROUND(s.border_km_saved_statewide, 2) AS border_km_saved_statewide,
+      s.nearest_state_safety_net_name,
       d.corridor_name,
       d.suggested_staging_landmark,
       d.nearest_safety_net_name,
@@ -764,9 +819,11 @@ def rank_candidate_tracts(
       fr.field_landmark
     FROM {T}.burden_tracts b
     JOIN {T}.tract_access a USING (geo_id)
+    LEFT JOIN {T}.synthetic_shortage_tracts s USING (geo_id)
     LEFT JOIN {T}.audit_tract_diagnostics d USING (geo_id)
     LEFT JOIN active_reports fr USING (geo_id)
-    WHERE b.total_pop >= 1200
+    WHERE STARTS_WITH(b.geo_id, '{county_fips}')
+      AND b.total_pop >= 1200
       AND b.latitude IS NOT NULL
       AND b.longitude IS NOT NULL
     """
@@ -791,10 +848,13 @@ def rank_candidate_tracts(
         + df["pct_indep_living_difficulty"].fillna(0) * 0.15
     )
 
+    runner_up_explanations: list[dict[str, Any]] = []
+
     if effective_strategy == "pass1_naive_access":
         # Pass 1 Naive Siting: Heavily weights raw in-county safety-net distance + uninsured rate
         # among tracts with at least moderate uninsured (>11%), without checking inter-stop
-        # clustering, CI overlap, or whether nearby safety-net sites are mobile vans / school clinics.
+        # clustering, CI overlap, cross-border clinics, or whether nearby safety-net sites are
+        # mobile vans / school clinics.
         eligible = df[df["pct_uninsured_18_64"] >= 11.5].copy()
         eligible["composite_score"] = (
             eligible["r_raw_dist"] * 0.55
@@ -806,8 +866,9 @@ def rank_candidate_tracts(
     else:
         # Pass 2 Audited Siting:
         # 1. Uses effective brick-and-mortar full-time safety-net distance (bounded by cross-border
-        #    statewide FQHCs so affluent border tracts aren't artificially inflated, and penalized
-        #    when the nearest county site is a mobile unit, school clinic, or <20 hr/wk site).
+        #    statewide FQHCs in `synthetic_shortage_tracts` / `care_sites_state` so border tracts
+        #    aren't artificially inflated, and penalized when the nearest county site is a mobile
+        #    unit, school clinic, or <20 hr/wk site).
         effective_km = df[["km_to_fulltime_safety_net", "km_to_statewide_safety_net"]].min(axis=1)
         capacity_illusion_bonus = (
             (df["nearest_sn_is_mobile_unit"].fillna(False).astype(float) * 2.0)
@@ -837,22 +898,84 @@ def rank_candidate_tracts(
         # Greedy spatial & corridor diversification: enforce min_inter_stop_km and distinct corridors
         selected_rows = []
         used_corridors: set[str] = set()
+        skipped_same_corridor: list[tuple[pd.Series, str]] = []
         for _, cand in eligible.iterrows():
             c_lat, c_lon = float(cand["latitude"]), float(cand["longitude"])
             c_corr = str(cand["corridor_name"])
             if c_corr in used_corridors:
+                if len(skipped_same_corridor) < 4:
+                    skipped_same_corridor.append(
+                        (
+                            cand,
+                            f"Same corridor ('{c_corr}') already served by a higher-scoring Saturday stop; "
+                            f"placing two stops in '{c_corr}' would cannibalize the catchment area (overlapping "
+                            f"CDC PLACES 95% confidence intervals). Prioritized for Month 2 rotation and served "
+                            f"by this month's '{c_corr}' deployment.",
+                        )
+                    )
                 continue
             too_close = False
+            closest_stop_id = ""
+            closest_dist = 999.0
             for prev in selected_rows:
                 dist = haversine_km(c_lat, c_lon, float(prev["latitude"]), float(prev["longitude"]))
                 if dist < min_inter_stop_km:
                     too_close = True
+                    closest_stop_id = str(prev["geo_id"])
+                    closest_dist = round(dist, 2)
                     break
-            if not too_close:
-                selected_rows.append(cand)
-                used_corridors.add(c_corr)
+            if too_close:
+                if len(skipped_same_corridor) < 4:
+                    skipped_same_corridor.append(
+                        (
+                            cand,
+                            f"Within {closest_dist} km (< {min_inter_stop_km} km minimum spacing) of selected "
+                            f"Stop {closest_stop_id}; residents are within the immediate catchment of Stop {closest_stop_id}.",
+                        )
+                    )
+                continue
+            selected_rows.append(cand)
+            used_corridors.add(c_corr)
             if len(selected_rows) == 4:
                 break
+
+        # Also record top cross-border runner-up tracts excluded via synthetic_shortage_tracts
+        border_excluded = df[
+            (df["has_closer_cross_border_clinic"] == True)
+            & (df["synthetic_shortage_score"] >= 65.0)
+        ].sort_values("synthetic_shortage_score", ascending=False).head(2)
+
+        for cand, reason in skipped_same_corridor[:3]:
+            runner_up_explanations.append(
+                {
+                    "geo_id": str(cand["geo_id"]),
+                    "corridor_name": str(cand["corridor_name"]),
+                    "composite_score": float(cand["composite_score"]),
+                    "synthetic_shortage_score": float(cand["synthetic_shortage_score"]) if pd.notna(cand["synthetic_shortage_score"]) else None,
+                    "pct_uninsured_18_64": float(cand["pct_uninsured_18_64"]),
+                    "pct_diabetes": float(cand["pct_diabetes"]),
+                    "pct_no_vehicle": float(cand["pct_no_vehicle"]) if pd.notna(cand["pct_no_vehicle"]) else None,
+                    "why_not_picked_this_month": reason,
+                }
+            )
+        for _, b_row in border_excluded.iterrows():
+            runner_up_explanations.append(
+                {
+                    "geo_id": str(b_row["geo_id"]),
+                    "corridor_name": str(b_row["corridor_name"]),
+                    "composite_score": float(b_row["composite_score"]),
+                    "synthetic_shortage_score": float(b_row["synthetic_shortage_score"]) if pd.notna(b_row["synthetic_shortage_score"]) else None,
+                    "pct_uninsured_18_64": float(b_row["pct_uninsured_18_64"]),
+                    "pct_diabetes": float(b_row["pct_diabetes"]),
+                    "pct_no_vehicle": float(b_row["pct_no_vehicle"]) if pd.notna(b_row["pct_no_vehicle"]) else None,
+                    "why_not_picked_this_month": (
+                        f"Flagged by `synthetic_shortage_tracts.has_closer_cross_border_clinic = TRUE`: "
+                        f"although {b_row['km_to_safety_net']} km from an in-county Fulton safety-net clinic, "
+                        f"residents are {b_row['border_km_saved_statewide']} km closer to out-of-county safety-net "
+                        f"clinic '{b_row['nearest_state_safety_net_name']}' across the county border in `care_sites_state`."
+                    ),
+                }
+            )
 
     saturdays = [
         "Saturday, Week 1 (9:00 AM – 3:00 PM)",
@@ -881,6 +1004,12 @@ def rank_candidate_tracts(
             f"{r['nearest_safety_net_hours_wk'] if pd.notna(r['nearest_safety_net_hours_wk']) else 'unreported in CMS'}; "
             f"full-time brick-and-mortar safety-net distance: {r['km_to_fulltime_safety_net']} km)."
         )
+        synth_note = (
+            f"synthetic_shortage_score={r['synthetic_shortage_score']} "
+            f"(is_synthetic_shortage_area={bool(r['is_synthetic_shortage_area'])}, "
+            f"km_to_shortage_facility={r['km_to_shortage_facility']} km, "
+            f"has_closer_cross_border_clinic={bool(r['has_closer_cross_border_clinic'])})."
+        )
 
         stops.append(
             {
@@ -893,6 +1022,8 @@ def rank_candidate_tracts(
                 "longitude": float(r["longitude"]),
                 "total_pop": int(r["total_pop"]),
                 "composite_score": float(r["composite_score"]),
+                "synthetic_shortage_score": float(r["synthetic_shortage_score"]) if pd.notna(r["synthetic_shortage_score"]) else None,
+                "is_synthetic_shortage_area": bool(r["is_synthetic_shortage_area"]),
                 "metrics": {
                     "pct_uninsured_18_64_places": float(r["pct_uninsured_18_64"]),
                     "pct_uninsured_all_ages_svi": float(r["pct_uninsured_all_ages"]),
@@ -912,7 +1043,15 @@ def rank_candidate_tracts(
                     "km_to_safety_net_raw": float(r["km_to_safety_net"]),
                     "km_to_fulltime_brick_mortar_safety_net": float(r["km_to_fulltime_safety_net"]),
                     "extra_km_if_uninsured": float(r["extra_km_if_uninsured"]),
+                    "synthetic_shortage_score": float(r["synthetic_shortage_score"]) if pd.notna(r["synthetic_shortage_score"]) else None,
+                    "is_synthetic_shortage_area": bool(r["is_synthetic_shortage_area"]),
+                    "not_near_safety_net": bool(r["not_near_safety_net"]),
+                    "not_near_shortage_facility": bool(r["not_near_shortage_facility"]),
+                    "km_to_shortage_facility": float(r["km_to_shortage_facility"]) if pd.notna(r["km_to_shortage_facility"]) else None,
+                    "has_closer_cross_border_clinic": bool(r["has_closer_cross_border_clinic"]),
+                    "border_km_saved_statewide": float(r["border_km_saved_statewide"]) if pd.notna(r["border_km_saved_statewide"]) else 0.0,
                 },
+                "synthetic_shortage_context": synth_note,
                 "facility_capacity_context": capacity_note,
                 "field_intelligence_applied": str(r["field_notes"]) if pd.notna(r.get("field_notes")) and r.get("field_notes") else "None logged for this tract.",
                 "recommended_clinical_kit": kit,
@@ -927,11 +1066,13 @@ def rank_candidate_tracts(
             "penalize_part_time_clinics": penalize_part_time_clinics,
             "exclude_cross_border_artifacts": exclude_cross_border_artifacts,
             "include_field_reports": include_field_reports,
+            "synthetic_shortage_tracts_integrated": True,
             "race_ethnicity_used_in_model": False,
             "pm25_or_hsa_used_to_rank_tracts": False,
         },
         "prior_audit_feedback_addressed": audit_feedback if effective_strategy == "pass2_audited_composite" else None,
         "selected_stops": stops,
+        "runner_up_tracts_not_selected": runner_up_explanations,
     }
     plan_payload = clean_json(plan_payload)
 
@@ -955,7 +1096,7 @@ def audit_candidate_plan(
     Exclusively called by `auditor_agent` / `equity_and_rigor_auditor`. Performs:
     1. Pairwise spatial cannibalization / corridor clustering check (< 3.5 km threshold).
     2. Statistical significance check using CDC PLACES 95% confidence intervals (`_crude95ci`).
-    3. Safety-net capacity illusion & transit-lock coverage check.
+    3. Safety-net capacity illusion, cross-border artifact (`synthetic_shortage_tracts`), & transit-lock coverage check.
     4. Mandatory Post-Hoc Demographic & Equity Audit against CDC/ATSDR SVI Theme 3
        (`RPL_THEME3` racial/ethnic minority status) and Census ACS demographics that the
        Planner was forbidden from seeing.
@@ -963,8 +1104,9 @@ def audit_candidate_plan(
     candidate_plan = None
     if tool_context is not None:
         candidate_plan = (
-            tool_context.state.get("pass2_candidate_plan")
-            or tool_context.state.get("candidate_plan_payload")
+            tool_context.state.get("candidate_plan_payload")
+            or tool_context.state.get("pass2_candidate_plan")
+            or tool_context.state.get("pass1_candidate_plan")
             or tool_context.state.get("candidate_plan")
         )
         if isinstance(candidate_plan, str):
@@ -978,7 +1120,11 @@ def audit_candidate_plan(
             stops = [{"geo_id": str(tid).strip(), "rank": i + 1} for i, tid in enumerate(candidate_tract_ids)]
             candidate_plan = {"plan_version": "custom", "selected_stops": stops}
         else:
-            candidate_plan = rank_candidate_tracts(county_fips="13121", pass_mode="pass2_audited_composite", tool_context=tool_context)
+            candidate_plan = rank_candidate_tracts(
+                county_fips="13121",
+                pass_mode="pass2_audited_composite",
+                tool_context=tool_context,
+            )
 
     stops = candidate_plan["selected_stops"]
     tract_ids = [s["geo_id"] for s in stops]
@@ -1001,6 +1147,14 @@ def audit_candidate_plan(
       b.svi_socioeconomic,
       b.svi_household,
       b.svi_housing_transport,
+      ROUND(s.synthetic_shortage_score, 2) AS synthetic_shortage_score,
+      COALESCE(s.is_synthetic_shortage_area, FALSE) AS is_synthetic_shortage_area,
+      COALESCE(s.not_near_safety_net, FALSE) AS not_near_safety_net,
+      COALESCE(s.not_near_shortage_facility, FALSE) AS not_near_shortage_facility,
+      ROUND(s.km_to_shortage_facility, 2) AS km_to_shortage_facility,
+      COALESCE(s.has_closer_cross_border_clinic, FALSE) AS has_closer_cross_border_clinic,
+      ROUND(s.border_km_saved_statewide, 2) AS border_km_saved_statewide,
+      s.nearest_state_safety_net_name,
       d.corridor_name,
       d.svi_theme3_minority,
       d.svi_overall_with_theme3,
@@ -1037,6 +1191,7 @@ def audit_candidate_plan(
       d.cross_border_savings_km
     FROM {T}.audit_tract_diagnostics d
     JOIN {T}.burden_tracts b USING (geo_id)
+    LEFT JOIN {T}.synthetic_shortage_tracts s USING (geo_id)
     WHERE d.geo_id IN ({in_clause})
     """
     audit_df = run_bq_query(audit_sql).set_index("geo_id")
@@ -1054,9 +1209,11 @@ def audit_candidate_plan(
       ROUND(AVG(d.acs_median_income), 0) AS county_mean_median_income,
       ROUND(AVG(b.pct_no_vehicle), 1) AS county_mean_no_vehicle_pct,
       ROUND(AVG(b.pct_diabetes), 1) AS county_mean_diabetes_pct,
-      ROUND(AVG(b.pct_uninsured), 1) AS county_mean_uninsured_pct
+      ROUND(AVG(b.pct_uninsured), 1) AS county_mean_uninsured_pct,
+      ROUND(AVG(s.synthetic_shortage_score), 2) AS county_mean_synthetic_shortage_score
     FROM {T}.audit_tract_diagnostics d
     JOIN {T}.burden_tracts b USING (geo_id)
+    LEFT JOIN {T}.synthetic_shortage_tracts s USING (geo_id)
     """
     county_base = run_bq_query(baseline_sql).iloc[0].to_dict()
 
@@ -1071,6 +1228,14 @@ def audit_candidate_plan(
         c1 = s1["corridor_name"]
         corridors_seen.setdefault(c1, []).append(s1["geo_id"])
         r1 = audit_df.loc[s1["geo_id"]] if s1["geo_id"] in audit_df.index else None
+
+        if r1 is not None and bool(r1.get("has_closer_cross_border_clinic")):
+            violations.append(
+                f"CROSS_BORDER_EDGE_ARTIFACT (`synthetic_shortage_tracts`): Tract {s1['geo_id']} is flagged "
+                f"with `has_closer_cross_border_clinic=TRUE`—an out-of-county safety-net clinic "
+                f"('{r1['nearest_state_safety_net_name']}') in `care_sites_state` is "
+                f"{r1['border_km_saved_statewide']} km closer than the nearest Fulton County safety-net clinic."
+            )
 
         for j in range(i + 1, len(stops)):
             s2 = stops[j]
@@ -1117,6 +1282,8 @@ def audit_candidate_plan(
     # 2. Transit-lock & chronic burden coverage check
     max_diabetes_in_plan = max(float(audit_df.loc[tid]["pct_diabetes"]) for tid in tract_ids if tid in audit_df.index)
     mean_no_veh_in_plan = sum(float(audit_df.loc[tid]["pct_no_vehicle"] or 0) for tid in tract_ids if tid in audit_df.index) / len(tract_ids)
+    mean_synth_score_in_plan = sum(float(audit_df.loc[tid]["synthetic_shortage_score"] or 0) for tid in tract_ids if tid in audit_df.index) / len(tract_ids)
+    synth_shortage_count_in_plan = sum(1 for tid in tract_ids if tid in audit_df.index and bool(audit_df.loc[tid]["is_synthetic_shortage_area"]))
 
     if max_diabetes_in_plan < 18.0:
         violations.append(
@@ -1184,6 +1351,15 @@ def audit_candidate_plan(
                 "pct_limited_english": round(lep, 1),
                 "pct_poverty_acs": round(p_pov, 1),
                 "acs_median_income": int(r["acs_median_income"]) if pd.notna(r["acs_median_income"]) else None,
+                "synthetic_shortage_audit": {
+                    "synthetic_shortage_score": float(r["synthetic_shortage_score"]) if pd.notna(r["synthetic_shortage_score"]) else None,
+                    "is_synthetic_shortage_area": bool(r["is_synthetic_shortage_area"]),
+                    "not_near_safety_net": bool(r["not_near_safety_net"]),
+                    "not_near_shortage_facility": bool(r["not_near_shortage_facility"]),
+                    "km_to_shortage_facility": float(r["km_to_shortage_facility"]) if pd.notna(r["km_to_shortage_facility"]) else None,
+                    "has_closer_cross_border_clinic": bool(r["has_closer_cross_border_clinic"]),
+                    "border_km_saved_statewide": float(r["border_km_saved_statewide"]) if pd.notna(r["border_km_saved_statewide"]) else 0.0,
+                },
                 "places_95_confidence_intervals": {
                     "uninsured_18_64": f"{r['pct_uninsured']}% {r['uninsured_ci_text']}",
                     "diabetes": f"{r['pct_diabetes']}% {r['diabetes_ci_text']}",
@@ -1219,6 +1395,9 @@ def audit_candidate_plan(
         "county_baseline_pct_poverty": float(county_base["county_mean_poverty_pct"]),
         "mean_no_vehicle_in_plan": round(mean_no_veh_in_plan, 1),
         "county_baseline_no_vehicle": float(county_base["county_mean_no_vehicle_pct"]),
+        "mean_synthetic_shortage_score_in_plan": round(mean_synth_score_in_plan, 2),
+        "county_baseline_synthetic_shortage_score": float(county_base["county_mean_synthetic_shortage_score"]),
+        "synthetic_shortage_areas_selected": synth_shortage_count_in_plan,
         "bilingual_spanish_priority_stops": high_lep_stops,
     }
 
@@ -1230,10 +1409,11 @@ def audit_candidate_plan(
             "MANDATORY REVISION FOR PASS 2: Re-run `rank_candidate_tracts` with "
             "`strategy='pass2_audited_composite'`, `min_inter_stop_km=4.0`, "
             "`penalize_part_time_clinics=True`, `exclude_cross_border_artifacts=True`, and "
-            "`include_field_reports=True`. You must eliminate corridor clustering in North Fulton / "
-            "Sandy Springs (do not place both 13121010125 and 13121010135/13121010214 in the same "
-            "month) and include transit-locked high-chronic-burden corridors in Southwest/Tri-Cities/"
-            "Westside/South Atlanta where vehiclelessness (>35%) and diabetes (>18%) peak."
+            "`include_field_reports=True`. You must eliminate corridor clustering and cross-border "
+            "edge artifacts in North Fulton (`has_closer_cross_border_clinic=TRUE` in "
+            "`synthetic_shortage_tracts`) and include transit-locked high-chronic-burden corridors "
+            "in Southwest/Tri-Cities/Westside/South Atlanta where vehiclelessness (>35%) and "
+            "diabetes (>18%) peak."
         )
 
     audit_result = {
@@ -1266,7 +1446,7 @@ def audit_candidate_plan(
         else:
             tool_context.state["approved_plan"] = candidate_plan
             tool_context.state["equity_audit_report"] = audit_result
-            tool_context.state["audit_feedback"] = "APPROVED — All spatial spacing, clinic-capacity, and equity audit checks passed."
+            tool_context.state["audit_feedback"] = "APPROVED — All spatial spacing, clinic-capacity, synthetic-shortage, and equity audit checks passed."
             # Signal LoopAgent to exit cleanly once approved
             tool_context.actions.escalate = True
 
