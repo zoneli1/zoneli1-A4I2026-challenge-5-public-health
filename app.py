@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -99,15 +100,27 @@ broker_runner = Runner(
 )
 
 
-def _json_safe(obj: Any) -> Any:
-    return json.loads(
-        json.dumps(
-            obj,
-            default=lambda o: o.isoformat()
-            if isinstance(o, (datetime.date, datetime.datetime))
-            else str(o),
-        )
-    )
+def _json_safe(v: Any) -> Any:
+    if v is None:
+        return None
+    if isinstance(v, float):
+        if math.isnan(v) or math.isinf(v):
+            return None
+        return v
+    if isinstance(v, (int, str, bool)):
+        return v
+    if isinstance(v, (datetime.date, datetime.datetime)):
+        return v.isoformat()
+    if isinstance(v, dict):
+        return {str(k): _json_safe(val) for k, val in v.items()}
+    if isinstance(v, (list, tuple, set)):
+        return [_json_safe(val) for val in v]
+    if hasattr(v, "item"):
+        val = v.item()
+        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+            return None
+        return val
+    return str(v)
 
 
 _DASHBOARD_CACHE: dict[str, Any] | None = None
