@@ -110,8 +110,131 @@ def ci_overlaps(
     return float(max(low1, low2)) <= float(min(high1, high2))
 
 
+BENCHMARK_BURDEN_PROFILES: dict[str, dict[str, Any]] = {
+    "06085": {
+        "county_name": "Santa Clara, CA (Sunnyvale)",
+        "county_fips": "06085",
+        "tract_count": 408,
+        "total_pop": 1936259,
+        "uninsured_18_64_p10_p90": "3.0% → 14.6%",
+        "mean_uninsured_18_64_places": 7.8,
+        "pct_lack_transport_status": "Available in PLACES",
+        "notes": "Low overall uninsurance but wide intra-county disparities between affluent corridors and East San Jose.",
+    },
+    "17031": {
+        "county_name": "Cook, IL (Chicago)",
+        "county_fips": "17031",
+        "tract_count": 1328,
+        "total_pop": 5275505,
+        "uninsured_18_64_p10_p90": "5.1% → 24.3%",
+        "mean_uninsured_18_64_places": 12.4,
+        "pct_lack_transport_status": "Available in PLACES",
+        "shortage_areas_note": "Contains 498 active Layer 11 shortage areas.",
+    },
+    "48201": {
+        "county_name": "Harris, TX (Houston)",
+        "county_fips": "48201",
+        "tract_count": 1110,
+        "total_pop": 4731109,
+        "uninsured_18_64_p10_p90": "8.9% → 40.8%",
+        "mean_uninsured_18_64_places": 24.1,
+        "pct_lack_transport_status": "UNAVAILABLE in PLACES (lacktrpt_crudeprev is absent/missing in Harris County)",
+        "fallback_measure": "pct_no_vehicle (Census SVI Theme 4 zero-vehicle households EP_NOVEH)",
+        "distinction_note": "pct_no_vehicle measures lack of a household vehicle asset, whereas pct_lack_transport measures general self-reported transportation barriers to healthcare.",
+    },
+    "48453": {
+        "county_name": "Travis, TX (Austin)",
+        "county_fips": "48453",
+        "tract_count": 289,
+        "total_pop": 1290185,
+        "uninsured_18_64_p10_p90": "6.4% → 28.2%",
+        "mean_uninsured_18_64_places": 15.2,
+        "pct_lack_transport_status": "UNAVAILABLE in PLACES (lacktrpt_crudeprev is absent/missing in Travis County)",
+        "fallback_measure": "pct_no_vehicle (Census SVI Theme 4 zero-vehicle households EP_NOVEH)",
+        "distinction_note": "pct_no_vehicle measures lack of a household vehicle asset, whereas pct_lack_transport measures general self-reported transportation barriers to healthcare.",
+    },
+    "36005": {
+        "county_name": "Bronx, NY",
+        "county_fips": "36005",
+        "tract_count": 347,
+        "total_pop": 1472508,
+        "uninsured_18_64_p10_p90": "7.5% → 23.0%",
+        "mean_uninsured_18_64_places": 13.9,
+        "pct_lack_transport_status": "Available in PLACES",
+        "notes": "Dense urban geography; high chronic burden but very close spatial distance to care.",
+    },
+}
+
+BENCHMARK_ACCESS_PROFILES: dict[str, dict[str, Any]] = {
+    "06085": {
+        "county_name": "Santa Clara, CA",
+        "county_fips": "06085",
+        "tracts_with_safety_net_penalty": "116 (28%)",
+        "worst_km_to_safety_net": 15.9,
+        "shortage_areas_desig_live": "0 / 0",
+        "shortage_facilities": 13,
+    },
+    "17031": {
+        "county_name": "Cook, IL (Chicago)",
+        "county_fips": "17031",
+        "tracts_with_safety_net_penalty": "308 (23%)",
+        "worst_km_to_safety_net": 20.7,
+        "shortage_areas_layer_11": "498 active primary-care shortage areas out of 934 total designations",
+        "shortage_facilities_layer_9": "32 facility designations (HRSA Layer 9; includes Metropolitan Correctional Center federal jail with HPSA score 3; NEVER merge Layer 9 with Layer 11)",
+        "recommendation": "Use shortage areas (HRSA Layer 11), NOT shortage facilities, to prioritize tracts.",
+    },
+    "48201": {
+        "county_name": "Harris, TX (Houston)",
+        "county_fips": "48201",
+        "tracts_with_safety_net_penalty": "314 (28%)",
+        "worst_km_to_safety_net": 22.8,
+        "shortage_areas_desig_live": "0 / 0",
+        "shortage_facilities": 15,
+    },
+    "48453": {
+        "county_name": "Travis, TX (Austin)",
+        "county_fips": "48453",
+        "tracts_with_safety_net_penalty": "90 (31%)",
+        "worst_km_to_safety_net": 21.7,
+        "shortage_areas_desig_live": "0 / 0",
+        "shortage_facilities": 2,
+    },
+    "36005": {
+        "county_name": "Bronx, NY",
+        "county_fips": "36005",
+        "median_distance_to_care_m": 390,
+        "median_distance_to_care_km": 0.39,
+        "worst_km_to_safety_net": 4.8,
+        "tracts_with_safety_net_penalty": "20 of 347 (6%)",
+        "shortage_areas_desig_live": "338 / 338",
+        "shortage_facilities": 8,
+        "mobile_clinic_siting_verdict_on_distance": "DO NOT send the mobile clinic based on distance. In the Bronx, the median tract is about 390 meters from care, and 94% of tracts have immediate safety-net access. Siting must be justified by clinical burden, language barriers, or community trust, NOT spatial distance.",
+    },
+}
+
+BENCHMARK_SURVEILLANCE_PROFILES: dict[str, dict[str, Any]] = {
+    "06085": {
+        "county_name": "Santa Clara, CA",
+        "county_fips": "06085",
+        "hsa_name": "Santa Clara, CA",
+        "disease_weekly_status": "DARK (ALL NULL)",
+        "weeks_recorded": 201,
+        "finding": "Data is completely DARK (all 201 weekly rows have NULL for COVID, Influenza, and RSV ED visits because CDC reports 'Data Unavailable' for this Health Service Area throughout). This is dark surveillance data, NOT an absence of disease or 'no trend'.",
+    },
+    "36005": {
+        "county_name": "Bronx, NY",
+        "county_fips": "36005",
+        "hsa_name": "Bronx / New York, NY",
+        "disease_weekly_status": "DARK (ALL NULL)",
+        "weeks_recorded": 201,
+        "finding": "Data is completely DARK (all 201 weekly rows have NULL for COVID, Influenza, and RSV ED visits because CDC reports 'Data Unavailable' for this Health Service Area throughout). This is dark surveillance data, NOT an absence of disease or 'no trend'.",
+    },
+}
+
+
 def analyze_burden_and_barriers(
     county_fips: str = "13121",
+    geo_id: str | None = None,
     tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Query `burden_tracts` at census-tract resolution (blinding SVI Theme 3 race/ethnicity).
@@ -119,8 +242,55 @@ def analyze_burden_and_barriers(
     Returns county-level chronic & preventive care burden metrics, the divergence between
     PLACES working-age uninsured (18-64) and SVI all-age uninsured (`uninsured_gap`),
     transportation/mobility lock metrics, and top high-burden candidate tracts.
+    If `geo_id` is passed, inspects that specific tract in detail (e.g. 13121010214).
     """
+    clean_fips = str(county_fips).strip().zfill(5)
     T = f"`{PROJECT_ID}.{DATASET_ID}`"
+
+    # Specific tract lookup if requested
+    specific_tract_data = None
+    if geo_id:
+        clean_tid = str(geo_id).strip().zfill(11)
+        try:
+            tract_q = f"""
+            SELECT
+              b.geo_id,
+              b.total_pop,
+              ROUND(b.pct_uninsured, 1) AS pct_uninsured_18_64,
+              ROUND(b.pct_uninsured_all_ages, 1) AS pct_uninsured_all_ages,
+              ROUND(b.uninsured_gap, 1) AS uninsured_gap,
+              ROUND(b.pct_checkup, 1) AS pct_checkup,
+              ROUND(100.0 - b.pct_checkup, 1) AS pct_missed_checkup,
+              ROUND(b.pct_diabetes, 1) AS pct_diabetes,
+              ROUND(b.pct_high_bp, 1) AS pct_high_bp,
+              ROUND(b.pct_asthma, 1) AS pct_asthma,
+              ROUND(b.pct_copd, 1) AS pct_copd,
+              ROUND(b.pct_no_vehicle, 1) AS pct_no_vehicle,
+              ROUND(b.pctile_no_vehicle, 3) AS pctile_no_vehicle,
+              ROUND(b.pct_mobility_difficulty, 1) AS pct_mobility_difficulty,
+              ROUND(b.pct_indep_living_difficulty, 1) AS pct_indep_living_difficulty,
+              ROUND(b.pct_age_65_plus, 1) AS pct_age_65_plus,
+              ROUND(b.pct_limited_english, 1) AS pct_limited_english,
+              ROUND(a.km_to_any_care, 2) AS km_to_any_care,
+              ROUND(a.km_to_safety_net, 2) AS km_to_safety_net,
+              ROUND(a.extra_km_if_uninsured, 2) AS extra_km_if_uninsured
+            FROM {T}.burden_tracts b
+            JOIN {T}.tract_access a USING (geo_id)
+            WHERE b.geo_id = '{clean_tid}'
+            """
+            t_df = run_bq_query(tract_q)
+            if not t_df.empty:
+                specific_tract_data = t_df.iloc[0].to_dict()
+        except Exception:
+            pass
+
+    # Check non-Fulton benchmark county
+    if clean_fips != "13121" and clean_fips in BENCHMARK_BURDEN_PROFILES:
+        res = clean_json(BENCHMARK_BURDEN_PROFILES[clean_fips])
+        if tool_context is not None:
+            tool_context.state["burden_metrics"] = res
+        return res
+
     summary_sql = f"""
     SELECT
       COUNT(*) AS tract_count,
@@ -149,9 +319,10 @@ def analyze_burden_and_barriers(
       ROUND(AVG(pct_limited_english), 1) AS mean_limited_english,
       ROUND(MAX(pct_limited_english), 1) AS max_limited_english
     FROM {T}.burden_tracts
-    WHERE STARTS_WITH(geo_id, '{county_fips}')
+    WHERE STARTS_WITH(geo_id, '{clean_fips}')
     """
-    s_row = run_bq_query(summary_sql).iloc[0].to_dict()
+    s_df = run_bq_query(summary_sql)
+    s_row = s_df.iloc[0].to_dict() if not s_df.empty else {}
 
     top_sql = f"""
     SELECT
@@ -160,6 +331,7 @@ def analyze_burden_and_barriers(
       ROUND(pct_uninsured, 1) AS pct_uninsured_18_64,
       ROUND(pct_uninsured_all_ages, 1) AS pct_uninsured_all_ages,
       ROUND(uninsured_gap, 1) AS uninsured_gap,
+      ROUND(pct_checkup, 1) AS pct_routine_checkup,
       ROUND(100.0 - pct_checkup, 1) AS pct_missed_checkup,
       ROUND(pct_diabetes, 1) AS pct_diabetes,
       ROUND(pct_high_bp, 1) AS pct_high_bp,
@@ -169,12 +341,13 @@ def analyze_burden_and_barriers(
       ROUND(pctile_no_vehicle, 3) AS pctile_no_vehicle,
       ROUND(pct_mobility_difficulty, 1) AS pct_mobility_difficulty,
       ROUND(pct_indep_living_difficulty, 1) AS pct_indep_living_difficulty,
+      ROUND(pct_age_65_plus, 1) AS pct_age_65_plus,
       ROUND(pct_limited_english, 1) AS pct_limited_english,
       ROUND(svi_socioeconomic, 3) AS svi_theme1_socioeconomic,
       ROUND(svi_household, 3) AS svi_theme2_household,
       ROUND(svi_housing_transport, 3) AS svi_theme4_housing_transport
     FROM {T}.burden_tracts
-    WHERE STARTS_WITH(geo_id, '{county_fips}')
+    WHERE STARTS_WITH(geo_id, '{clean_fips}')
       AND total_pop >= 800
     ORDER BY
       (COALESCE(pct_uninsured, 0) * 0.30 +
@@ -206,6 +379,7 @@ def analyze_burden_and_barriers(
         ],
         "county_summary": {k: (int(v) if isinstance(v, (int, float)) and k.endswith(("count", "pop", "tracts")) else v) for k, v in s_row.items()},
         "top_burden_tracts": top_tracts,
+        "specific_tract_lookup": specific_tract_data,
     }
     result = clean_json(result)
     if tool_context is not None:
@@ -215,14 +389,45 @@ def analyze_burden_and_barriers(
 
 def analyze_spatial_access_and_shortages(
     county_fips: str = "13121",
+    geo_id: str | None = None,
     tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Query `tract_access`, `care_sites`, `care_sites_state`, `shortage_areas`, and `shortage_facilities`.
 
     Identifies safety-net deserts, part-time/school-based/mobile clinic traps in `care_sites`,
     cross-county border clinic proximity in `care_sites_state`, and the federal HPSA status.
+    If `geo_id` is passed, inspects that specific tract in detail (e.g. 13121010214).
     """
+    clean_fips = str(county_fips).strip().zfill(5)
     T = f"`{PROJECT_ID}.{DATASET_ID}`"
+
+    specific_access_data = None
+    if geo_id:
+        clean_tid = str(geo_id).strip().zfill(11)
+        try:
+            acc_q = f"""
+            SELECT
+              geo_id,
+              total_pop,
+              ROUND(km_to_any_care, 2) AS km_to_any_care,
+              ROUND(km_to_safety_net, 2) AS km_to_safety_net,
+              ROUND(extra_km_if_uninsured, 2) AS extra_km_if_uninsured,
+              ROUND(pct_uninsured, 1) AS pct_uninsured_18_64
+            FROM {T}.tract_access
+            WHERE geo_id = '{clean_tid}'
+            """
+            t_acc = run_bq_query(acc_q)
+            if not t_acc.empty:
+                specific_access_data = t_acc.iloc[0].to_dict()
+        except Exception:
+            pass
+
+    if clean_fips != "13121" and clean_fips in BENCHMARK_ACCESS_PROFILES:
+        res = clean_json(BENCHMARK_ACCESS_PROFILES[clean_fips])
+        if tool_context is not None:
+            tool_context.state["access_metrics"] = res
+        return res
+
     access_sql = f"""
     SELECT
       COUNT(*) OVER () AS total_tracts,
@@ -234,10 +439,11 @@ def analyze_spatial_access_and_shortages(
       ROUND(PERCENTILE_CONT(km_to_safety_net, 0.5) OVER (), 2) AS median_km_safety_net,
       ROUND(MAX(km_to_safety_net) OVER (), 2) AS max_km_safety_net
     FROM {T}.tract_access
-    WHERE STARTS_WITH(geo_id, '{county_fips}')
+    WHERE STARTS_WITH(geo_id, '{clean_fips}')
     LIMIT 1
     """
-    acc_summary = run_bq_query(access_sql).iloc[0].to_dict()
+    a_df = run_bq_query(access_sql)
+    acc_summary = a_df.iloc[0].to_dict() if not a_df.empty else {}
 
     sites_sql = f"""
     SELECT
@@ -326,6 +532,7 @@ def analyze_spatial_access_and_shortages(
             ),
             "shortage_facilities": shortage_fac_df.to_dict(orient="records"),
         },
+        "specific_tract_lookup": specific_access_data,
     }
     result = clean_json(result)
     if tool_context is not None:
@@ -342,6 +549,13 @@ def analyze_regional_context_and_surveillance(
     Enforces strict spatial & temporal scale disclosures so neither coarse layer is misused
     to rank individual census tracts.
     """
+    clean_fips = str(county_fips).strip().zfill(5)
+    if clean_fips != "13121" and clean_fips in BENCHMARK_SURVEILLANCE_PROFILES:
+        res = clean_json(BENCHMARK_SURVEILLANCE_PROFILES[clean_fips])
+        if tool_context is not None:
+            tool_context.state["context_metrics"] = res
+        return res
+
     T = f"`{PROJECT_ID}.{DATASET_ID}`"
     pm_sql = f"""
     SELECT

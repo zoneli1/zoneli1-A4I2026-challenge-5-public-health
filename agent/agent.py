@@ -30,6 +30,7 @@ from .prompts import (
 )
 from .tools import (
     analyze_burden_and_barriers,
+    analyze_regional_context_and_surveillance,
     analyze_spatial_access_and_shortages,
     audit_candidate_plan,
     get_field_reports,
@@ -44,13 +45,14 @@ def build_planner_agent(model: str = DEFAULT_MODEL) -> LlmAgent:
     """Planner Agent: Queries BigQuery data and writes candidate plan to session.state['candidate_plan']."""
     return LlmAgent(
         name="planner_agent",
-        description="Queries BigQuery data (Burden, Access, Shortages) and proposes a 4-stop Saturday mobile care deployment.",
+        description="Queries BigQuery data (Burden, Access, Shortages, Regional Surveillance) and proposes a 4-stop Saturday mobile care deployment.",
         instruction=PLANNER_PROMPT,
         model=model,
         tools=[
             rank_candidate_tracts,
             analyze_burden_and_barriers,
             analyze_spatial_access_and_shortages,
+            analyze_regional_context_and_surveillance,
         ],
         output_key="candidate_plan",
     )
@@ -93,6 +95,7 @@ def build_root_agent(model: str = DEFAULT_MODEL) -> LlmAgent:
         tools=[
             analyze_burden_and_barriers,
             analyze_spatial_access_and_shortages,
+            analyze_regional_context_and_surveillance,
             get_field_reports,
         ],
         sub_agents=[planner, auditor, communicator],
