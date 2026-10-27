@@ -1,0 +1,99 @@
+CREATE OR REPLACE VIEW `qwiklabs-gcp-04-f5825262a0a0.a4i_health.v_planner_holistic_ranking` AS
+WITH active_reports AS (
+  -- Aggregate any active frontline field reports by tract
+  SELECT 
+    geo_id,
+    MAX(severity_adjustment) AS chw_severity_boost,
+    STRING_AGG(field_notes, ' | ' LIMIT 2) AS active_field_notes,
+    ANY_VALUE(verified_landmark) AS chw_verified_landmark
+  FROM `qwiklabs-gcp-04-f5825262a0a0.a4i_health.field_reports`
+  WHERE active = TRUE
+  GROUP BY geo_id
+),
+
+base_metrics AS (
+  SELECT 
+    b.geo_id,
+    b.total_pop,
+    diag.corridor_name,
+    COALESCE(ar.chw_verified_landmark, diag.suggested_staging_landmark, 'Community Center / Transit Plaza') AS target_staging_landmark,
+    
+    -- 1. Unmet Preventive & Insurance Barriers
+    b.pct_uninsured,
+    (100.0 - b.pct_checkup) AS pct_missed_checkup,  -- Directionality fix: Low checkup = high need
+    
+    -- 2. Physical & Mobility Barriers
+    b.pct_no_vehicle,
+    b.pct_mobility_difficulty,
+    b.pct_no_internet,
+    
+    -- 3. Chronic Cardiometabolic & Respiratory Disease Burden
+    b.pct_diabetes,
+    b.pct_high_bp,
+    b.pct_asthma,
+    b.pct_copd,
+    
+    -- 4. True Safety-Net Distance Realities (Avoiding the Nominal Clinic Trap)
+    COALESCE(diag.km_to_fulltime_safety_net, s.km_to_safety_net) AS km_to_effective_safety_net,
+    s.extra_km_if_uninsured,
+    s.border_km_saved_statewide,
+    
+    -- 5. Field Intelligence Multiplier
+    COALESCE(ar.chw_severity_boost, 1.0) AS field_severity_multiplier,
+    ar.active_field_notes
+  FROM `qwiklabs-gcp-04-f5825262a0a0.a4i_health.burden_tracts` b
+  LEFT JOIN `qwiklabs-gcp-04-f5825262a0a0.a4i_health.synthetic_shortage_tracts` s 
+    ON b.geo_id = s.geo_id
+  LEFT JOIN `qwiklabs-gcp-04-f5825262a0a0.a4i_health.audit_tract_diagnostics` diag 
+    ON b.geo_id = diag.geo_id
+  LEFT JOIN active_reports ar 
+    ON b.geo_id = ar.geo_id
+  WHERE b.total_pop >= 500  -- Filter out non-residential / suppressed tracts (airports, industrial parks)
+),
+
+normalized_scores AS (
+  SELECT 
+    *,
+    -- Sub-score A: Insurance & Preventive Gap (0 to 100 scale relative to county max)
+    ((pct_uninsured * 0.6) + (pct_missed_checkup * 0.4)) AS need_access_raw,
+    
+    -- Sub-score B: Chronic Clinical Severity
+    ((pct_diabetes * 0.35) + (pct_high_bp * 0.35) + (pct_asthma * 0.15) + (pct_copd * 0.15)) AS clinical_severity_raw,
+    
+    -- Sub-score C: Transportation & Mobility Penalty
+    -- A 5km distance is manageable with a car, but devastating if no-vehicle is high
+    (km_to_effective_safety_net * (1.0 + (pct_no_vehicle / 50.0))) AS transit_adjusted_distance
+  FROM base_metrics
+)
+
+SELECT 
+  geo_id,
+  total_pop,
+  corridor_name,
+  target_staging_landmark,
+  ROUND(pct_uninsured, 1) AS pct_uninsured,
+  ROUND(pct_no_vehicle, 1) AS pct_no_vehicle,
+  ROUND(pct_missed_checkup, 1) AS pct_missed_checkup,
+  ROUND(pct_diabetes, 1) AS pct_diabetes,
+  ROUND(pct_high_bp, 1) AS pct_high_bp,
+  ROUND(pct_asthma, 1) AS pct_asthma,
+  ROUND(km_to_effective_safety_net, 2) AS km_to_effective_safety_net,
+  ROUND(extra_km_if_uninsured, 2) AS extra_km_if_uninsured,
+  ROUND(border_km_saved_statewide, 2) AS border_km_saved_statewide,
+  field_severity_multiplier,
+  active_field_notes,
+
+  -- Holistic Siting Score (0 - 100 index weighted across dimensions * field boost)
+  ROUND(
+    LEAST(
+      100.0,
+      (
+        (need_access_raw * 1.5) +               -- 30% weight on uninsured/missed checkup
+        (clinical_severity_raw * 1.2) +         -- 30% weight on chronic condition prevalence
+        (LEAST(transit_adjusted_distance * 4.0, 40.0)) -- 40% weight on vehicle-adjusted clinic distance
+      ) * field_severity_multiplier
+    ),
+    1
+  ) AS holistic_siting_score
+FROM normalized_scores;
+

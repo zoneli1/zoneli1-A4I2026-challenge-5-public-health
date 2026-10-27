@@ -39,6 +39,7 @@ warnings.filterwarnings("ignore", message=".*BigQuery Storage module not found.*
 
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "qwiklabs-gcp-04-f5825262a0a0")
 DATASET_ID = os.environ.get("A4I_DATASET", "a4i_health")
+PROJECT_DATASET = f"{PROJECT_ID}.{DATASET_ID}"
 BQ_LABELS = {"datacloud": "antigravity"}
 
 _bq_client: bigquery.Client | None = None
@@ -145,7 +146,15 @@ def analyze_burden_and_barriers(
       ROUND(MAX(pct_no_vehicle), 1) AS max_no_vehicle,
       COUNTIF(pct_no_vehicle IS NULL) AS null_no_vehicle_tracts,
       ROUND(AVG(pct_mobility_difficulty), 1) AS mean_mobility_difficulty,
+      ROUND(AVG(pct_selfcare_difficulty), 1) AS mean_selfcare_difficulty,
       ROUND(AVG(pct_indep_living_difficulty), 1) AS mean_indep_living_difficulty,
+      ROUND(AVG(pct_any_disability), 1) AS mean_any_disability_places,
+      ROUND(AVG(pct_disability_svi), 1) AS mean_disability_svi_acs,
+      ROUND(AVG(pct_no_internet), 1) AS mean_no_internet,
+      ROUND(MAX(pct_no_internet), 1) AS max_no_internet,
+      ROUND(AVG(pct_age_65_plus), 1) AS mean_age_65_plus,
+      ROUND(AVG(pct_age_17_under), 1) AS mean_age_17_under,
+      ROUND(AVG(pct_group_quarters), 1) AS mean_group_quarters,
       ROUND(AVG(pct_limited_english), 1) AS mean_limited_english,
       ROUND(MAX(pct_limited_english), 1) AS max_limited_english
     FROM {T}.burden_tracts
@@ -157,8 +166,10 @@ def analyze_burden_and_barriers(
     SELECT
       geo_id,
       total_pop,
+      svi_total_pop,
       ROUND(pct_uninsured, 1) AS pct_uninsured_18_64,
       ROUND(pct_uninsured_all_ages, 1) AS pct_uninsured_all_ages,
+      ROUND(pctile_uninsured, 3) AS pctile_uninsured,
       ROUND(uninsured_gap, 1) AS uninsured_gap,
       ROUND(100.0 - pct_checkup, 1) AS pct_missed_checkup,
       ROUND(pct_diabetes, 1) AS pct_diabetes,
@@ -167,8 +178,16 @@ def analyze_burden_and_barriers(
       ROUND(pct_copd, 1) AS pct_copd,
       ROUND(pct_no_vehicle, 1) AS pct_no_vehicle,
       ROUND(pctile_no_vehicle, 3) AS pctile_no_vehicle,
+      ROUND(pct_no_internet, 1) AS pct_no_internet,
       ROUND(pct_mobility_difficulty, 1) AS pct_mobility_difficulty,
+      ROUND(pct_selfcare_difficulty, 1) AS pct_selfcare_difficulty,
       ROUND(pct_indep_living_difficulty, 1) AS pct_indep_living_difficulty,
+      ROUND(pct_any_disability, 1) AS pct_any_disability,
+      ROUND(pct_disability_svi, 1) AS pct_disability_svi,
+      ROUND(pct_age_65_plus, 1) AS pct_age_65_plus,
+      ROUND(pct_age_17_under, 1) AS pct_age_17_under,
+      ROUND(pct_group_quarters, 1) AS pct_group_quarters,
+      ROUND(pct_mobile_homes, 1) AS pct_mobile_homes,
       ROUND(pct_limited_english, 1) AS pct_limited_english,
       ROUND(svi_socioeconomic, 3) AS svi_theme1_socioeconomic,
       ROUND(svi_household, 3) AS svi_theme2_household,
@@ -247,9 +266,14 @@ def analyze_spatial_access_and_shortages(
       COUNT(*) AS site_count,
       COUNTIF(TOT_OPER_HR_PER_WEEK IS NOT NULL) AS with_hours_reported,
       COUNTIF(TOT_OPER_HR_PER_WEEK < 20) AS part_time_under_20h,
-      COUNTIF(REGEXP_CONTAINS(UPPER(FACILITY_NM), r'MOBILE|SPRINTER|VAN')) AS mobile_van_listings,
-      COUNTIF(REGEXP_CONTAINS(UPPER(FACILITY_NM), r'SCHOOL|ELEMENTARY|ACADEMY|HIGH|KIPP|NOLAN|BANNEKER|DOBBS|HOLLIS|MILES')) AS school_based_sites
+      COUNTIF(TOT_OPER_HR_PER_WEEK < 30) AS part_time_under_30h,
+      COUNTIF(HCC_LOC_SETTING_DESC = 'Mobile Van' OR REGEXP_CONTAINS(UPPER(FACILITY_NM), r'MOBILE|SPRINTER|VAN')) AS mobile_van_listings,
+      COUNTIF(SBHC_SUB_PROG_IND = 'Yes' OR HCC_LOC_SETTING_DESC = 'School' OR REGEXP_CONTAINS(UPPER(FACILITY_NM), r'SCHOOL|ELEMENTARY|ACADEMY|HIGH|KIPP|NOLAN|BANNEKER|DOBBS|HOLLIS|MILES')) AS school_based_sites,
+      COUNTIF(PHPC_SUB_PROG_IND = 'Yes') AS public_housing_sites,
+      COUNTIF(HCH_SUB_PROG_IND = 'Yes') AS homeless_health_sites,
+      COUNTIF(MHC_SUB_PROG_IND = 'Yes') AS migrant_health_sites
     FROM {T}.care_sites
+    WHERE county_geo_id = '{county_fips}' OR county_geo_id IS NULL
     GROUP BY site_kind
     ORDER BY site_count DESC
     """
@@ -260,11 +284,19 @@ def analyze_spatial_access_and_shortages(
       FACILITY_NM,
       site_kind,
       CMS_PROVIDER_CITY AS city,
-      TOT_OPER_HR_PER_WEEK AS hours_per_week
+      TOT_OPER_HR_PER_WEEK AS hours_per_week,
+      HCC_LOC_SETTING_DESC AS location_setting,
+      SBHC_SUB_PROG_IND AS is_school_based_program,
+      HCC_TYP_DESC AS center_type,
+      HCC_STATUS_DESC AS operating_status,
+      SITE_POP_TYP_DESC AS population_type
     FROM {T}.care_sites
-    WHERE site_kind != 'Hospital'
+    WHERE (county_geo_id = '{county_fips}' OR county_geo_id IS NULL)
+      AND site_kind != 'Hospital'
       AND (
-        TOT_OPER_HR_PER_WEEK < 20
+        TOT_OPER_HR_PER_WEEK < 30
+        OR SBHC_SUB_PROG_IND = 'Yes'
+        OR HCC_LOC_SETTING_DESC IN ('School', 'Mobile Van')
         OR REGEXP_CONTAINS(UPPER(FACILITY_NM), r'MOBILE|SPRINTER|SCHOOL|ELEMENTARY|ACADEMY|KIPP|NOLAN|BANNEKER|DOBBS|HOLLIS|MILES')
       )
     ORDER BY COALESCE(TOT_OPER_HR_PER_WEEK, 999) ASC
@@ -272,14 +304,78 @@ def analyze_spatial_access_and_shortages(
     """
     constrained_sites = run_bq_query(low_hr_sql).to_dict(orient="records")
 
-    shortage_areas_n = int(run_bq_query(f"SELECT COUNT(*) AS n FROM {T}.shortage_areas").iloc[0]["n"])
-    shortage_fac_df = run_bq_query(
+    shortage_areas_df = run_bq_query(
         f"""
-        SELECT CMN_STATE_COUNTY_FIPS_CD, HPSA_NM, HPSA_TYP_DESC, HPSA_SCORE, HPSA_STATUS_DESC, ADDRESS, CITY
-        FROM {T}.shortage_facilities
+        SELECT GEO_ID, geo_id_len, HPSA_NM, HPSA_SCORE, cnt_shortage_Designation
+        FROM {T}.shortage_areas
+        WHERE STARTS_WITH(GEO_ID, '{county_fips}')
         ORDER BY HPSA_SCORE DESC
         """
     )
+    shortage_areas_n = len(shortage_areas_df)
+
+    shortage_fac_df = run_bq_query(
+        f"""
+        SELECT
+          CMN_STATE_COUNTY_FIPS_CD,
+          HPSA_NM,
+          HPSA_TYP_DESC,
+          HPSA_POPULATION_TYP_DESC,
+          HPSA_SCORE,
+          HPSA_STATUS_DESC,
+          HPSA_DESIGNATION_POP,
+          RURAL_STATUS_DESC,
+          ADDRESS,
+          CITY,
+          latitude,
+          longitude,
+          IFNULL(HPSA_TYP_DESC, '') LIKE '%Correctional%' AS is_correctional_facility
+        FROM {T}.shortage_facilities
+        WHERE CMN_STATE_COUNTY_FIPS_CD = '{county_fips}' OR CMN_STATE_COUNTY_FIPS_CD IS NULL
+        ORDER BY HPSA_SCORE DESC
+        """
+    )
+
+    synth_summary_sql = f"""
+    SELECT
+      COUNT(*) AS total_tracts,
+      COUNTIF(is_synthetic_shortage_area) AS synthetic_shortage_tracts_count,
+      COUNTIF(not_near_safety_net) AS not_near_safety_net_count,
+      COUNTIF(not_near_shortage_facility) AS not_near_shortage_facility_count,
+      COUNTIF(has_closer_cross_border_clinic) AS closer_cross_border_clinic_count,
+      ROUND(AVG(synthetic_shortage_score), 1) AS mean_synthetic_shortage_score,
+      ROUND(MAX(synthetic_shortage_score), 1) AS max_synthetic_shortage_score,
+      ROUND(AVG(km_to_shortage_facility), 2) AS mean_km_to_shortage_facility
+    FROM {T}.synthetic_shortage_tracts
+    WHERE STARTS_WITH(geo_id, '{county_fips}')
+    """
+    synth_summary = run_bq_query(synth_summary_sql).iloc[0].to_dict()
+
+    synth_top_sql = f"""
+    SELECT
+      geo_id,
+      tract_name,
+      total_pop,
+      ROUND(synthetic_shortage_score, 1) AS synthetic_shortage_score,
+      is_synthetic_shortage_area,
+      ROUND(km_to_any_site, 2) AS km_to_any_site,
+      ROUND(km_to_safety_net, 2) AS km_to_safety_net,
+      ROUND(km_to_shortage_facility, 2) AS km_to_shortage_facility,
+      ROUND(extra_km_if_uninsured, 2) AS extra_km_if_uninsured,
+      ROUND(km_to_safety_net_statewide, 2) AS km_to_safety_net_statewide,
+      ROUND(border_km_saved_statewide, 2) AS border_km_saved_statewide,
+      nearest_safety_net_name,
+      nearest_safety_net_hours_wk,
+      nearest_state_safety_net_name,
+      not_near_safety_net,
+      not_near_shortage_facility,
+      has_closer_cross_border_clinic
+    FROM {T}.synthetic_shortage_tracts
+    WHERE STARTS_WITH(geo_id, '{county_fips}')
+    ORDER BY synthetic_shortage_score DESC
+    LIMIT 10
+    """
+    synth_top = run_bq_query(synth_top_sql).to_dict(orient="records")
 
     synth_summary_sql = f"""
     SELECT
@@ -334,9 +430,13 @@ def analyze_spatial_access_and_shortages(
     cross_border_tracts = run_bq_query(cross_border_sql).to_dict(orient="records")
 
     result = {
+        "layer_name": "tract_access, synthetic_shortage_tracts, care_sites, care_sites_state, shortage_areas, shortage_facilities",
+        "true_spatial_grain": "Tract centroid-to-facility point great-circle distance (km) + facility points",
         "layer_name": "tract_access, care_sites, care_sites_state, shortage_areas, shortage_facilities, synthetic_shortage_tracts",
         "true_spatial_grain": "Tract centroid-to-facility point great-circle distance (km) + facility points + tract-level synthetic shortage index",
         "access_summary": acc_summary,
+        "synthetic_shortage_tracts_summary": synth_summary,
+        "top_synthetic_shortage_tracts": synth_top,
         "care_sites_breakdown": site_breakdown,
         "limited_capacity_or_restricted_sites_in_care_sites": constrained_sites,
         "cross_county_border_findings": {
@@ -351,17 +451,22 @@ def analyze_spatial_access_and_shortages(
         },
         "federal_hpsa_findings": {
             "shortage_areas_count": shortage_areas_n,
+            "active_shortage_areas": shortage_areas_df.to_dict(orient="records"),
             "shortage_areas_explanation": (
                 "Fulton County has 0 live rows in `shortage_areas` because all 99 primary-care HPSA "
                 "area designations in Fulton County carry status `Proposed For Withdrawal` in HRSA Layer 8. "
                 "Relying on federal HPSA polygons alone would falsely classify Fulton County as having zero "
-                "primary-care shortage areas while 443,800 residents live >5 km from a safety-net clinic."
+                "primary-care shortage areas while 443,800 residents live >5 km from a safety-net clinic. "
+                "Therefore `synthetic_shortage_tracts` provides the data-driven shortage proxy."
             ),
             "shortage_facilities_count": len(shortage_fac_df),
+            "community_shortage_facilities_count": int((~shortage_fac_df["is_correctional_facility"]).sum()) if len(shortage_fac_df) else 0,
+            "excluded_correctional_facilities_count": int(shortage_fac_df["is_correctional_facility"].sum()) if len(shortage_fac_df) else 0,
             "shortage_facilities_explanation": (
                 "6 point-designated facilities exist in `shortage_facilities` (HRSA Layer 9, keyed on "
-                "`CMN_STATE_COUNTY_FIPS_CD`). These mark where safety-net care ALREADY IS, not where care "
-                "is missing—they must never be UNIONed with `shortage_areas`."
+                "`CMN_STATE_COUNTY_FIPS_CD`), including 1 Correctional Facility (US Penitentiary Atlanta) "
+                "which must be excluded when evaluating community walk-in access. These mark where "
+                "safety-net care ALREADY IS, not where care is missing—they must never be UNIONed with `shortage_areas`."
             ),
             "shortage_facilities": shortage_fac_df.to_dict(orient="records"),
         },
@@ -399,7 +504,7 @@ def analyze_regional_context_and_surveillance(
     pm_sql = f"""
     SELECT
       COUNT(*) AS exposure_rows,
-      (SELECT COUNT(*) FROM {T}.burden_tracts) AS burden_rows,
+      (SELECT COUNT(*) FROM {T}.burden_tracts WHERE STARTS_WITH(geo_id, '{county_fips}')) AS burden_rows,
       ROUND(MIN(mean_pm), 2) AS min_mean_pm,
       ROUND(MAX(mean_pm), 2) AS max_mean_pm,
       ROUND(AVG(mean_pm), 2) AS avg_mean_pm,
@@ -408,10 +513,13 @@ def analyze_regional_context_and_surveillance(
       MAX(days_over_12) AS max_days_over_12,
       MIN(days_over_20) AS min_days_over_20,
       MAX(days_over_20) AS max_days_over_20,
+      MIN(days_over_25) AS min_days_over_25,
       MAX(days_over_25) AS max_days_over_25,
+      MIN(days_over_35) AS min_days_over_35,
       MAX(days_over_35) AS max_days_over_35,
       ROUND(MAX(max_pm), 1) AS worst_single_day_pm
     FROM {T}.exposure_tracts
+    WHERE STARTS_WITH(geo_id, '{county_fips}')
     """
     pm_row = run_bq_query(pm_sql).iloc[0].to_dict()
 
@@ -420,6 +528,7 @@ def analyze_regional_context_and_surveillance(
       ROUND(PERCENTILE_CONT(mean_pm, 0.10) OVER (), 3) AS p10_pm,
       ROUND(PERCENTILE_CONT(mean_pm, 0.90) OVER (), 3) AS p90_pm
     FROM {T}.exposure_tracts
+    WHERE STARTS_WITH(geo_id, '{county_fips}')
     LIMIT 1
     """
     pct_row = run_bq_query(pct_sql).iloc[0].to_dict()
@@ -429,7 +538,8 @@ def analyze_regional_context_and_surveillance(
     SELECT e.geo_id, ROUND(e.mean_pm, 2) AS mean_pm
     FROM {T}.exposure_tracts e
     LEFT JOIN {T}.burden_tracts b USING (geo_id)
-    WHERE b.geo_id IS NULL
+    WHERE STARTS_WITH(e.geo_id, '{county_fips}')
+      AND b.geo_id IS NULL
     """
     orphan_tracts = run_bq_query(orphan_sql).to_dict(orient="records")
 
@@ -440,10 +550,12 @@ def analyze_regional_context_and_surveillance(
       MAX(week_end) AS latest_week,
       ANY_VALUE(hsa) AS hsa_name,
       ANY_VALUE(hsa_counties) AS hsa_counties,
+      ANY_VALUE(trend_source) AS trend_source,
       COUNTIF(ed_trends_covid IS NOT NULL) AS weeks_with_covid_trend,
       COUNTIF(ed_trends_influenza IS NOT NULL) AS weeks_with_flu_trend,
       COUNTIF(ed_trends_rsv IS NOT NULL) AS weeks_with_rsv_trend
     FROM {T}.disease_weekly
+    WHERE LPAD(CAST(fips AS STRING), 5, '0') = '{county_fips}'
     """
     ed_summary = run_bq_query(ed_sql).iloc[0].to_dict()
 
@@ -451,14 +563,20 @@ def analyze_regional_context_and_surveillance(
     SELECT
       CAST(week_end AS STRING) AS week_end,
       hsa_counties,
+      trend_source,
       ROUND(percent_visits_combined, 2) AS pct_ed_combined,
       ROUND(percent_visits_covid, 2) AS pct_ed_covid,
       ROUND(percent_visits_influenza, 2) AS pct_ed_flu,
       ROUND(percent_visits_rsv, 2) AS pct_ed_rsv,
+      ROUND(percent_visits_smoothed_combined, 2) AS pct_ed_smoothed_combined,
+      ROUND(percent_visits_smoothed_covid, 2) AS pct_ed_smoothed_covid,
+      ROUND(percent_visits_smoothed_influenza, 2) AS pct_ed_smoothed_flu,
+      ROUND(percent_visits_smoothed_rsv, 2) AS pct_ed_smoothed_rsv,
       ed_trends_covid,
       ed_trends_influenza,
       ed_trends_rsv
     FROM {T}.disease_weekly
+    WHERE LPAD(CAST(fips AS STRING), 5, '0') = '{county_fips}'
     ORDER BY week_end DESC
     LIMIT 6
     """
@@ -474,6 +592,8 @@ def analyze_regional_context_and_surveillance(
             "exceedance_tail_2021": {
                 "days_over_12_ug_m3": f"{int(pm_row['min_days_over_12'])}-{int(pm_row['max_days_over_12'])} days",
                 "days_over_20_ug_m3": f"{int(pm_row['min_days_over_20'])}-{int(pm_row['max_days_over_20'])} days",
+                "days_over_25_ug_m3": f"{int(pm_row['min_days_over_25'])}-{int(pm_row['max_days_over_25'])} days",
+                "days_over_35_ug_m3": f"{int(pm_row['min_days_over_35'])}-{int(pm_row['max_days_over_35'])} days",
                 "worst_day_ug_m3": pm_row["worst_single_day_pm"],
             },
             "join_asymmetry_finding": {
@@ -493,6 +613,7 @@ def analyze_regional_context_and_surveillance(
         "disease_weekly_analysis": {
             "true_spatial_grain": f"4-County Health Service Area (HSA): {ed_summary['hsa_counties']}",
             "true_temporal_grain": f"Weekly ({ed_summary['earliest_week']} to {ed_summary['latest_week']}, {ed_summary['total_weeks']} weeks)",
+            "trend_source": ed_summary.get("trend_source"),
             "recent_6_weeks": recent_ed,
             "operational_use_rule": (
                 "NEVER use `disease_weekly` to choose Tract A over Tract B—every tract in Fulton, "
@@ -509,8 +630,327 @@ def analyze_regional_context_and_surveillance(
     return result
 
 
+# ==============================================================================
+# HOLISTIC PLANNER TOOLS (STRICTLY BLINDED TO RACE & DEMOGRAPHICS)
+# ==============================================================================
+
+
+def get_holistic_tract_rankings(
+    min_uninsured_pct: float = 12.0,
+    min_no_vehicle_pct: float = 10.0,
+    top_n: int = 15,
+) -> str:
+    """
+    Ranks Fulton County census tracts holistically using pre-joined clinical need,
+    transit barriers, effective safety-net clinic distances, and active CHW field boosts.
+    Strictly excludes racial and demographic variables.
+    """
+    query = f"""
+    SELECT 
+        geo_id,
+        total_pop,
+        corridor_name,
+        target_staging_landmark,
+        pct_uninsured,
+        pct_no_vehicle,
+        pct_missed_checkup,
+        pct_diabetes,
+        pct_high_bp,
+        pct_asthma,
+        km_to_effective_safety_net,
+        extra_km_if_uninsured,
+        border_km_saved_statewide,
+        field_severity_multiplier,
+        active_field_notes,
+        holistic_siting_score
+    FROM `{PROJECT_DATASET}.v_planner_holistic_ranking`
+    WHERE pct_uninsured >= @min_uninsured
+      AND pct_no_vehicle >= @min_no_vehicle
+    ORDER BY holistic_siting_score DESC
+    LIMIT @top_n
+    """
+    client = get_bq_client()
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("min_uninsured", "FLOAT64", float(min_uninsured_pct)),
+            bigquery.ScalarQueryParameter("min_no_vehicle", "FLOAT64", float(min_no_vehicle_pct)),
+            bigquery.ScalarQueryParameter("top_n", "INT64", int(top_n)),
+        ],
+        labels=BQ_LABELS,
+    )
+    query_job = client.query(query, job_config=job_config)
+    results = [clean_json(dict(row)) for row in query_job.result()]
+    return json.dumps(results, indent=2, default=str)
+
+
+def get_candidate_siting_tracts(
+    min_uninsured_pct: float = 12.0,
+    min_no_vehicle_pct: float = 10.0,
+    top_n: int = 15,
+) -> str:
+    """Alias for `get_holistic_tract_rankings` to retrieve holistic candidate tracts without demographics."""
+    return get_holistic_tract_rankings(
+        min_uninsured_pct=min_uninsured_pct,
+        min_no_vehicle_pct=min_no_vehicle_pct,
+        top_n=top_n,
+    )
+
+
+def get_tract_deep_dive(geo_ids: list[str]) -> str:
+    """
+    Retrieves detailed clinical burden, 95% confidence intervals, transit/digital barriers,
+    synthetic shortage scores, and staging landmarks for specific census tracts.
+    Strictly excludes all racial, ethnic, and SVI Theme 3 demographic columns.
+
+    Args:
+        geo_ids: List of 11-digit census tract FIPS codes to inspect.
+    """
+    query = f"""
+    SELECT
+        v.geo_id,
+        v.total_pop,
+        v.corridor_name,
+        v.target_staging_landmark,
+        v.holistic_siting_score,
+        v.pct_uninsured,
+        ROUND(b.pct_uninsured_all_ages, 1) AS pct_uninsured_all_ages_svi,
+        ROUND(b.uninsured_gap, 1) AS uninsured_gap_working_vs_all_ages,
+        diag.uninsured_ci_text,
+        v.pct_missed_checkup,
+        diag.checkup_ci_text,
+        v.pct_no_vehicle,
+        ROUND(b.pct_mobility_difficulty, 1) AS pct_mobility_difficulty,
+        ROUND(b.pct_selfcare_difficulty, 1) AS pct_selfcare_difficulty,
+        ROUND(b.pct_indep_living_difficulty, 1) AS pct_indep_living_difficulty,
+        ROUND(b.pct_any_disability, 1) AS pct_any_disability_places,
+        ROUND(b.pct_disability_svi, 1) AS pct_disability_svi_acs,
+        ROUND(b.pct_no_internet, 1) AS pct_no_internet,
+        ROUND(b.pct_age_65_plus, 1) AS pct_age_65_plus,
+        ROUND(b.pct_group_quarters, 1) AS pct_group_quarters,
+        v.pct_diabetes,
+        diag.diabetes_ci_text,
+        v.pct_high_bp,
+        diag.high_bp_ci_text,
+        v.pct_asthma,
+        diag.asthma_ci_text,
+        ROUND(b.pct_copd, 1) AS pct_copd,
+        diag.copd_ci_text,
+        ROUND(b.pct_depression, 1) AS pct_depression,
+        ROUND(s.km_to_any_site, 2) AS km_to_any_site,
+        ROUND(s.km_to_safety_net, 2) AS km_to_raw_county_safety_net,
+        v.km_to_effective_safety_net,
+        ROUND(s.km_to_shortage_facility, 2) AS km_to_shortage_facility,
+        v.extra_km_if_uninsured,
+        v.border_km_saved_statewide,
+        s.has_closer_cross_border_clinic,
+        ROUND(s.synthetic_shortage_score, 1) AS synthetic_shortage_score,
+        s.is_synthetic_shortage_area,
+        v.field_severity_multiplier,
+        v.active_field_notes
+    FROM `{PROJECT_DATASET}.v_planner_holistic_ranking` v
+    LEFT JOIN `{PROJECT_DATASET}.burden_tracts` b
+      ON v.geo_id = b.geo_id
+    LEFT JOIN `{PROJECT_DATASET}.synthetic_shortage_tracts` s
+      ON v.geo_id = s.geo_id
+    LEFT JOIN `{PROJECT_DATASET}.audit_tract_diagnostics` diag
+      ON v.geo_id = diag.geo_id
+    WHERE v.geo_id IN UNNEST(@geo_ids)
+    ORDER BY v.holistic_siting_score DESC
+    """
+    client = get_bq_client()
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ArrayQueryParameter("geo_ids", "STRING", [str(g).strip() for g in geo_ids])],
+        labels=BQ_LABELS,
+    )
+    query_job = client.query(query, job_config=job_config)
+    results = [clean_json(dict(row)) for row in query_job.result()]
+    return json.dumps(results, indent=2, default=str)
+
+
+def save_proposed_plan(
+    proposed_plan: str,
+    tool_context: ToolContext | None = None,
+) -> str:
+    """Saves the Planner Agent's 4-Saturday mobile clinic deployment plan to `session.state['proposed_plan']`."""
+    if tool_context is not None:
+        tool_context.state["proposed_plan"] = proposed_plan
+        tool_context.state["candidate_plan"] = proposed_plan
+    return json.dumps({"status": "saved", "state_key": "proposed_plan"})
+
+
+# ==============================================================================
+# GRANULAR AUDITOR TOOLS (POST-HOC DEMOGRAPHIC, FACILITY & BORDER AUDITING)
+# ==============================================================================
+
+
+def audit_tract_demographics(geo_ids: list[str]) -> str:
+    """
+    Exclusively used by the Auditor Agent to perform post-hoc demographic equity auditing.
+    Retrieves Census ACS race/ethnicity percentages, SVI Theme 3 (minority status),
+    median household income, and poverty rates for the proposed tracts.
+
+    Args:
+        geo_ids: List of 11-digit census tract FIPS codes from the proposed plan.
+    """
+    query = f"""
+    SELECT 
+        diag.geo_id,
+        diag.corridor_name,
+        ROUND(diag.pct_black, 1) AS pct_black,
+        ROUND(diag.pct_hispanic, 1) AS pct_hispanic,
+        ROUND(diag.pct_minority, 1) AS pct_minority,
+        ROUND(diag.svi_theme3_minority, 2) AS svi_theme3_percentile,
+        ROUND(diag.pct_poverty_acs, 1) AS pct_poverty_acs,
+        diag.acs_median_income,
+        ROUND(b.pct_uninsured, 1) AS pct_uninsured,
+        ROUND(b.pct_no_vehicle, 1) AS pct_no_vehicle
+    FROM `{PROJECT_DATASET}.audit_tract_diagnostics` diag
+    LEFT JOIN `{PROJECT_DATASET}.burden_tracts` b
+      ON diag.geo_id = b.geo_id
+    WHERE diag.geo_id IN UNNEST(@geo_ids)
+    """
+    client = get_bq_client()
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ArrayQueryParameter("geo_ids", "STRING", [str(g).strip() for g in geo_ids])],
+        labels=BQ_LABELS,
+    )
+    query_job = client.query(query, job_config=job_config)
+    results = [clean_json(dict(row)) for row in query_job.result()]
+    return json.dumps(results, indent=2, default=str)
+
+
+def audit_facility_reality(geo_ids: list[str]) -> str:
+    """
+    Inspects whether the nearest safety-net clinics for the proposed tracts are
+    real full-time facilities or nominal/restricted clinics (part-time, school-only, or mobile vans).
+
+    Args:
+        geo_ids: List of 11-digit census tract FIPS codes.
+    """
+    query = f"""
+    SELECT 
+        geo_id,
+        corridor_name,
+        nearest_safety_net_name,
+        nearest_safety_net_kind,
+        nearest_safety_net_hours_wk,
+        nearest_sn_is_part_time,
+        nearest_sn_is_school_based,
+        nearest_sn_is_mobile_unit,
+        ROUND(km_to_county_safety_net, 2) AS km_to_county_safety_net,
+        ROUND(km_to_fulltime_safety_net, 2) AS km_to_fulltime_safety_net,
+        ROUND(fulltime_hours_penalty_km, 2) AS fulltime_hours_penalty_km
+    FROM `{PROJECT_DATASET}.audit_tract_diagnostics`
+    WHERE geo_id IN UNNEST(@geo_ids)
+    """
+    client = get_bq_client()
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ArrayQueryParameter("geo_ids", "STRING", [str(g).strip() for g in geo_ids])],
+        labels=BQ_LABELS,
+    )
+    query_job = client.query(query, job_config=job_config)
+    results = [clean_json(dict(row)) for row in query_job.result()]
+    return json.dumps(results, indent=2, default=str)
+
+
+def audit_cross_border_access(geo_ids: list[str]) -> str:
+    """
+    Checks if any candidate tract has a closer safety-net clinic located just across
+    the county line in an adjacent county (using care_sites_state).
+
+    Args:
+        geo_ids: List of 11-digit census tract FIPS codes.
+    """
+    query = f"""
+    SELECT 
+        geo_id,
+        corridor_name,
+        ROUND(km_to_county_safety_net, 2) AS km_to_county_safety_net,
+        ROUND(km_to_statewide_safety_net, 2) AS km_to_statewide_safety_net,
+        ROUND(cross_border_savings_km, 2) AS cross_border_savings_km,
+        nearest_statewide_safety_net_name,
+        nearest_statewide_safety_net_city
+    FROM `{PROJECT_DATASET}.audit_tract_diagnostics`
+    WHERE geo_id IN UNNEST(@geo_ids)
+    """
+    client = get_bq_client()
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ArrayQueryParameter("geo_ids", "STRING", [str(g).strip() for g in geo_ids])],
+        labels=BQ_LABELS,
+    )
+    query_job = client.query(query, job_config=job_config)
+    results = [clean_json(dict(row)) for row in query_job.result()]
+    return json.dumps(results, indent=2, default=str)
+
+
+def find_overlooked_high_burden_tracts(limit: int = 5) -> str:
+    """
+    Discovers high-poverty, high-burden, predominantly minority tracts that
+    might have been overlooked by the initial clinical selection.
+    Used by the Auditor to challenge the Planner.
+    """
+    query = f"""
+    SELECT 
+        diag.geo_id,
+        diag.corridor_name,
+        ROUND(diag.pct_minority, 1) AS pct_minority,
+        ROUND(diag.pct_poverty_acs, 1) AS pct_poverty_acs,
+        ROUND(b.pct_uninsured, 1) AS pct_uninsured,
+        ROUND(b.pct_no_vehicle, 1) AS pct_no_vehicle,
+        ROUND(b.pct_diabetes, 1) AS pct_diabetes,
+        ROUND(diag.km_to_fulltime_safety_net, 2) AS km_to_fulltime_safety_net,
+        diag.suggested_staging_landmark
+    FROM `{PROJECT_DATASET}.audit_tract_diagnostics` diag
+    JOIN `{PROJECT_DATASET}.burden_tracts` b ON diag.geo_id = b.geo_id
+    WHERE diag.pct_minority >= 70.0
+      AND b.pct_uninsured >= 18.0
+      AND b.pct_no_vehicle >= 15.0
+      AND diag.km_to_fulltime_safety_net >= 4.0
+    ORDER BY b.pct_uninsured DESC
+    LIMIT @limit
+    """
+    client = get_bq_client()
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ScalarQueryParameter("limit", "INT64", int(limit))],
+        labels=BQ_LABELS,
+    )
+    query_job = client.query(query, job_config=job_config)
+    results = [clean_json(dict(row)) for row in query_job.result()]
+    return json.dumps(results, indent=2, default=str)
+
+
+def record_audit_verdict(
+    verdict: str,
+    audit_feedback: str,
+    tool_context: ToolContext | None = None,
+) -> str:
+    """
+    Records the Auditor Agent's decision (`APPROVED` or `REVISION_REQUIRED`) and actionable
+    feedback into `session.state["audit_verdict"]` and `session.state["audit_feedback"]`.
+    """
+    normalized_verdict = "REVISION_REQUIRED" if "REVISION" in str(verdict).upper() or "REJECT" in str(verdict).upper() else "APPROVED"
+    if tool_context is not None:
+        tool_context.state["audit_verdict"] = normalized_verdict
+        tool_context.state["audit_feedback"] = audit_feedback
+        tool_context.state["audit_findings"] = audit_feedback
+        tool_context.state["equity_audit"] = {
+            "verdict": normalized_verdict,
+            "audit_feedback": audit_feedback,
+        }
+    return json.dumps(
+        {
+            "status": "recorded",
+            "audit_verdict": normalized_verdict,
+            "audit_feedback": audit_feedback,
+        },
+        indent=2,
+    )
+
+
 def rank_candidate_tracts(
+    county_fips: str = "13121",
     strategy: str = "auto",
+    pass_mode: str | None = None,
     min_inter_stop_km: float = 0.0,
     penalize_part_time_clinics: bool = False,
     exclude_cross_border_artifacts: bool = False,
@@ -537,6 +977,8 @@ def rank_candidate_tracts(
         prior_verdict = tool_context.state.get("audit_verdict")
         audit_feedback = tool_context.state.get("audit_feedback")
 
+    effective_mode = pass_mode if pass_mode is not None else strategy
+
     # Determine whether this is Pass 1 (naive first proposal) or Pass 2 (post-rejection revision)
     if pass_mode in ("pass1_naive_access", "pass2_audited_composite") and strategy == "auto":
         effective_strategy = pass_mode
@@ -546,7 +988,7 @@ def rank_candidate_tracts(
         else:
             effective_strategy = "pass1_naive_access"
     else:
-        effective_strategy = strategy
+        effective_strategy = effective_mode
 
     if effective_strategy == "pass2_audited_composite":
         min_inter_stop_km = max(min_inter_stop_km, 4.0)
@@ -938,10 +1380,13 @@ def audit_candidate_plan(
       b.pct_uninsured,
       b.pct_uninsured_all_ages,
       b.uninsured_gap,
+      b.pct_checkup,
       b.pct_diabetes,
       b.pct_high_bp,
       b.pct_asthma,
+      b.pct_copd,
       b.pct_no_vehicle,
+      b.pct_no_internet,
       b.pct_mobility_difficulty,
       b.pct_limited_english,
       b.svi_socioeconomic,
@@ -965,6 +1410,8 @@ def audit_candidate_plan(
       d.pct_white_acs,
       d.acs_median_income,
       d.pct_poverty_acs,
+      d.pct_below_150pct_poverty_svi,
+      d.pctile_minority_svi,
       d.uninsured_ci_low,
       d.uninsured_ci_high,
       d.uninsured_ci_text,
@@ -974,19 +1421,27 @@ def audit_candidate_plan(
       d.asthma_ci_low,
       d.asthma_ci_high,
       d.asthma_ci_text,
+      d.copd_ci_low,
+      d.copd_ci_high,
+      d.copd_ci_text,
       d.high_bp_ci_low,
       d.high_bp_ci_high,
       d.high_bp_ci_text,
       d.checkup_ci_low,
       d.checkup_ci_high,
       d.checkup_ci_text,
+      d.lack_transport_ci_text,
       d.nearest_safety_net_name,
+      d.nearest_safety_net_kind,
       d.nearest_safety_net_hours_wk,
       d.nearest_sn_is_mobile_unit,
       d.nearest_sn_is_school_based,
       d.nearest_sn_is_part_time,
       d.km_to_county_safety_net,
       d.km_to_fulltime_safety_net,
+      d.fulltime_hours_penalty_km,
+      d.nearest_statewide_safety_net_name,
+      d.nearest_statewide_safety_net_city,
       d.km_to_statewide_safety_net,
       d.cross_border_savings_km
     FROM {T}.audit_tract_diagnostics d
@@ -1165,16 +1620,21 @@ def audit_candidate_plan(
                     "diabetes": f"{r['pct_diabetes']}% {r['diabetes_ci_text']}",
                     "high_bp": f"{r['pct_high_bp']}% {r['high_bp_ci_text']}",
                     "asthma": f"{r['pct_asthma']}% {r['asthma_ci_text']}",
-                    "routine_checkup": f"{r['uninsured_gap']}% uninsured gap; checkup CI {r['checkup_ci_text']}",
+                    "copd": f"{r['pct_copd']}% {r['copd_ci_text']}",
+                    "routine_checkup": f"{r['pct_checkup']}% routine checkup ({r['uninsured_gap']}% uninsured gap); checkup CI {r['checkup_ci_text']}",
                 },
                 "nearest_clinic_audit": {
                     "facility_name": str(r["nearest_safety_net_name"]),
+                    "facility_kind": str(r["nearest_safety_net_kind"]) if pd.notna(r["nearest_safety_net_kind"]) else None,
                     "hours_per_week": float(r["nearest_safety_net_hours_wk"]) if pd.notna(r["nearest_safety_net_hours_wk"]) else None,
                     "is_mobile_unit": bool(r["nearest_sn_is_mobile_unit"]),
                     "is_school_based": bool(r["nearest_sn_is_school_based"]),
                     "is_part_time": bool(r["nearest_sn_is_part_time"]),
                     "km_raw_safety_net": float(r["km_to_county_safety_net"]),
                     "km_fulltime_brick_mortar_safety_net": float(r["km_to_fulltime_safety_net"]),
+                    "fulltime_hours_penalty_km": float(r["fulltime_hours_penalty_km"]) if pd.notna(r["fulltime_hours_penalty_km"]) else 0.0,
+                    "nearest_statewide_safety_net_name": str(r["nearest_statewide_safety_net_name"]) if pd.notna(r["nearest_statewide_safety_net_name"]) else None,
+                    "nearest_statewide_safety_net_city": str(r["nearest_statewide_safety_net_city"]) if pd.notna(r["nearest_statewide_safety_net_city"]) else None,
                 },
             }
         )
