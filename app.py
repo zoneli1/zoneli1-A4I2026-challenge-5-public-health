@@ -26,10 +26,15 @@ os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 os.environ.setdefault("A4I_DATASET", "a4i_health")
 os.environ.setdefault("A4I_MODEL", "gemini-3.6-flash")
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai.types import Content, Part
 from pydantic import BaseModel
 
+from agent.agent import root_agent
 from agent.tools import (
     DATASET_ID,
     PROJECT_ID,
@@ -47,6 +52,14 @@ from tests.test_agent_e2e import CACHE_PATH, run_full_broker_pipeline
 app = FastAPI(
     title="A4I Challenge 5 — Dynamic Public Health Equity & Mobile Care Broker",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -72,6 +85,18 @@ class FieldReportRequest(BaseModel):
 
 class RunAgentRequest(BaseModel):
     prompt: str | None = None
+
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str | None = None
+    user_id: str = "web_user"
+
+
+session_service = InMemorySessionService()
+broker_runner = Runner(
+    agent=root_agent, session_service=session_service, app_name="broker_app"
+)
 
 
 def _json_safe(obj: Any) -> Any:
@@ -206,6 +231,7 @@ FRONTEND_HTML_PATH = Path(__file__).resolve().parent / "frontend" / "index.html"
 
 
 @app.get("/", response_class=HTMLResponse)
+@app.head("/", response_class=HTMLResponse)
 async def serve_index() -> HTMLResponse:
     return HTMLResponse(content=FRONTEND_HTML_PATH.read_text(encoding="utf-8"))
 
@@ -259,3 +285,126 @@ async def trigger_agent_pipeline(req: RunAgentRequest) -> JSONResponse:
         return JSONResponse(content=_json_safe(run_payload))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/chat")
+async def handle_chat(req: ChatRequest) -> JSONResponse:
+    """Conversational endpoint executing Google ADK multi-agent orchestrator."""
+    try:
+        session_id = req.session_id
+        if not session_id:
+            sess = await session_service.create_session(app_name="broker_app", user_id=req.user_id)
+            session_id = sess.id
+        else:
+            try:
+                sess = await session_service.get_session(app_name="broker_app", user_id=req.user_id, session_id=session_id)
+            except Exception:
+                sess = await session_service.create_session(app_name="broker_app", user_id=req.user_id, session_id=session_id)
+
+        user_msg = Content(role="user", parts=[Part.from_text(text=req.message)])
+        text_chunks: list[str] = []
+        author = "mobile_care_equity_broker"
+
+        async for event in broker_runner.run_async(user_id=req.user_id, session_id=session_id, new_message=user_msg):
+            if hasattr(event, "author") and event.author:
+                author = event.author
+            if hasattr(event, "content") and event.content:
+                for part in event.content.parts:
+                    if getattr(part, "text", None):
+                        text_chunks.append(part.text)
+
+        reply = "\n\n".join(text_chunks) if text_chunks else "I processed your request, but no text response was produced."
+        updated_sess = await session_service.get_session(app_name="broker_app", user_id=req.user_id, session_id=session_id)
+        current_state = getattr(updated_sess, "state", {})
+
+        return JSONResponse(
+            content={
+                "reply": reply,
+                "session_id": session_id,
+                "author": author,
+                "state": _json_safe(current_state),
+            }
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(exc), "reply": f"Sorry, an error occurred in the agent runtime: {exc}"},
+        )
+
+
+@app.get("/api/download-flyer")
+async def download_flyer(lang: str = "bilingual", format: str = "txt") -> Response:
+    """Download plain-text or markdown community outreach flyer."""
+    en_flyer = (
+        "===========================================================\n"
+        "   FREE HEALTH CHECKUPS THIS SATURDAY!\n"
+        "   FULTON COUNTY PREVENTATIVE MOBILE CARE CLINIC\n"
+        "===========================================================\n\n"
+        "NO HEALTH INSURANCE? NO PROBLEM!\n"
+        "Everyone in our neighborhood is welcome. All care is 100% FREE.\n\n"
+        "WHAT WE OFFER FOR YOU & YOUR FAMILY:\n"
+        "  * Free Blood Pressure Checks\n"
+        "  * Free Diabetes Finger-Stick A1c Screenings\n"
+        "  * Free Asthma & Breathing Screenings (with inhaler prescriptions)\n"
+        "  * Free Flu, COVID-19 & Adult Routine Vaccines\n"
+        "  * Friendly nutrition guidance & direct connections to permanent clinics\n\n"
+        "WHAT TO BRING:\n"
+        "  * NOTHING! No ID or driver's license required.\n"
+        "  * No proof of address or income needed.\n"
+        "  * No health insurance required.\n"
+        "  * Walk-ins welcome -- no appointment necessary!\n"
+        "  * Spanish and English interpreters on site.\n\n"
+        "UPCOMING 4-WEEK SATURDAY SCHEDULE (9:00 AM - 3:00 PM):\n"
+        "  * Week 1: Center Hill / NW Atlanta -- Center Hill Park (Tract 13121008400)\n"
+        "  * Week 2: Bankhead / Grove Park -- West Lake Transit Hub (Tract 13121008602)\n"
+        "  * Week 3: South Atlanta / Carver -- Carver Community Center (Tract 13121006500)\n"
+        "  * Week 4: College Park / Tri-Cities -- Old National Transit Plaza (Tract 13121010701)\n\n"
+        "Need a ride? MARTA bus lines drop off within 200m of all clinic sites.\n"
+        "Questions? Call Fulton County Health & Human Services at (404) 612-4000\n"
+    )
+
+    es_flyer = (
+        "===========================================================\n"
+        "   ¡CHEQUEOS DE SALUD GRATUITOS ESTE SÁBADO!\n"
+        "   CLÍNICA MÓVIL DE ATENCIÓN PREVENTIVA DEL CONDADO DE FULTON\n"
+        "===========================================================\n\n"
+        "¿NO TIENE SEGURO MÉDICO? ¡NO SE PREOCUPE!\n"
+        "Toda nuestra comunidad es bienvenida. Toda la atención es 100% GRATUITA.\n\n"
+        "SERVICIOS PARA USTED Y SU FAMILIA:\n"
+        "  * Chequeos gratuitos de presión arterial\n"
+        "  * Pruebas rápidas de glucosa y diabetes (A1c con punción en el dedo)\n"
+        "  * Revisiones de asma y salud pulmonar\n"
+        "  * Vacunas gratuitas contra la gripe (Flu), COVID-19 y vacunas de rutina\n"
+        "  * Orientación nutricional y citas directas con clínicas comunitarias permanentes\n\n"
+        "¿QUÉ NECESITA TRAER?:\n"
+        "  * ¡NADA! No se requiere identificación ni licencia de conducir.\n"
+        "  * No se necesita comprobante de domicilio ni de ingresos.\n"
+        "  * No se requiere seguro médico.\n"
+        "  * Atención por orden de llegada, ¡no necesita cita previa!\n"
+        "  * Intérpretes amables de español e inglés disponibles en el lugar.\n\n"
+        "CALENDARIO DE 4 SÁBADOS (9:00 AM - 3:00 PM):\n"
+        "  * Semana 1: Center Hill / Noroeste de Atlanta -- Parque Center Hill (Tract 13121008400)\n"
+        "  * Semana 2: Bankhead / Grove Park -- Centro de Tránsito West Lake (Tract 13121008602)\n"
+        "  * Semana 3: Sur de Atlanta / Carver -- Centro Comunitario Carver (Tract 13121006500)\n"
+        "  * Semana 4: College Park / Tri-Cities -- Plaza Old National (Tract 13121010701)\n\n"
+        "¿Cómo llegar? Las líneas de autobús de MARTA paran a menos de 200 metros.\n"
+        "¿Preguntas? Llame a Salud y Servicios Humanos de Fulton: (404) 612-4000\n"
+    )
+
+    if lang == "en":
+        body = en_flyer
+        filename = f"fulton_mobile_care_flyer_en.{format}"
+    elif lang == "es":
+        body = es_flyer
+        filename = f"fulton_mobile_care_flyer_es.{format}"
+    else:
+        body = f"{en_flyer}\n\n-----------------------------------------------------------\n\n{es_flyer}"
+        filename = f"fulton_mobile_care_bilingual_flyer.{format}"
+
+    media_type = "text/markdown" if format == "md" else "text/plain"
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+

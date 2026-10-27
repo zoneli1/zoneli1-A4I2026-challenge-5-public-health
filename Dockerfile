@@ -18,7 +18,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY agent/ ./agent/
 COPY scripts/ ./scripts/
+COPY tests/ ./tests/
+COPY frontend/ ./frontend/
+COPY app.py ./app.py
 
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "exec python -m google.adk.cli web --host 0.0.0.0 --port ${PORT:-8080} --allow_origins=\"*\" ."]
+ENTRYPOINT ["sh", "-c", "exec python -m uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}"]
