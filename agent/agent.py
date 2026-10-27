@@ -22,6 +22,7 @@ os.environ.setdefault("A4I_DATASET", "a4i_health")
 
 from google.adk.agents import LlmAgent
 
+from .mcp_config import create_bigquery_mcp_toolset
 from .prompts import (
     AUDITOR_PROMPT,
     BROKER_COORDINATOR_PROMPT,
@@ -30,6 +31,7 @@ from .prompts import (
 )
 from .tools import (
     analyze_burden_and_barriers,
+    analyze_regional_context_and_surveillance,
     analyze_spatial_access_and_shortages,
     audit_candidate_plan,
     get_field_reports,
@@ -40,18 +42,24 @@ from .tools import (
 DEFAULT_MODEL = os.getenv("A4I_MODEL", "gemini-3.6-flash")
 
 
-def build_planner_agent(model: str = DEFAULT_MODEL) -> LlmAgent:
+def build_planner_agent(model: str = DEFAULT_MODEL, include_mcp: bool = False) -> LlmAgent:
     """Planner Agent: Queries BigQuery data and writes candidate plan to session.state['candidate_plan']."""
+    tools: list = [
+        rank_candidate_tracts,
+        analyze_burden_and_barriers,
+        analyze_spatial_access_and_shortages,
+        analyze_regional_context_and_surveillance,
+        get_field_reports,
+    ]
+    if include_mcp:
+        tools.append(create_bigquery_mcp_toolset(readonly=True))
+
     return LlmAgent(
         name="planner_agent",
-        description="Queries BigQuery data (Burden, Access, Shortages) and proposes a 4-stop Saturday mobile care deployment.",
+        description="Queries BigQuery data (Burden, Access, Shortages, Synthetic Shortage Tracts, Surveillance) and proposes a 4-stop Saturday mobile care deployment.",
         instruction=PLANNER_PROMPT,
         model=model,
-        tools=[
-            rank_candidate_tracts,
-            analyze_burden_and_barriers,
-            analyze_spatial_access_and_shortages,
-        ],
+        tools=tools,
         output_key="candidate_plan",
     )
 
@@ -60,7 +68,7 @@ def build_auditor_agent(model: str = DEFAULT_MODEL) -> LlmAgent:
     """Auditor Agent: Evaluates equity criteria and writes audit results to session.state['equity_audit']."""
     return LlmAgent(
         name="auditor_agent",
-        description="Evaluates candidate plan against health equity criteria (uninsured share, vehicle access, CDC SVI demographics).",
+        description="Evaluates candidate plan against health equity, synthetic shortage, cross-border clinic, and statistical criteria; rejects Pass 1 and approves Pass 2.",
         instruction=AUDITOR_PROMPT,
         model=model,
         tools=[audit_candidate_plan],
@@ -72,29 +80,34 @@ def build_communicator_agent(model: str = DEFAULT_MODEL) -> LlmAgent:
     """Communicator Agent: Reads final state and generates plain-language outreach copy & 4-week calendar."""
     return LlmAgent(
         name="communicator_agent",
-        description="Generates clear, plain-language outreach copy and the complete 4-week mobile clinic calendar.",
+        description="Generates the 4-part Clinic Plan (Where and when, What to bring, Why here and not there, What this plan cannot see) and bilingual outreach copy.",
         instruction=COMMUNICATOR_PROMPT,
         model=model,
         tools=[get_field_reports, log_clinic_field_report],
     )
 
 
-def build_root_agent(model: str = DEFAULT_MODEL) -> LlmAgent:
+def build_root_agent(model: str = DEFAULT_MODEL, include_mcp: bool = False) -> LlmAgent:
     """Builds the conversational broker root agent with the 3 sub-agents."""
-    planner = build_planner_agent(model=model)
+    planner = build_planner_agent(model=model, include_mcp=include_mcp)
     auditor = build_auditor_agent(model=model)
     communicator = build_communicator_agent(model=model)
+
+    root_tools: list = [
+        analyze_burden_and_barriers,
+        analyze_spatial_access_and_shortages,
+        analyze_regional_context_and_surveillance,
+        get_field_reports,
+    ]
+    if include_mcp:
+        root_tools.append(create_bigquery_mcp_toolset(readonly=True))
 
     return LlmAgent(
         name="mobile_care_equity_broker",
         description="Interactive Public Health Equity & Preventative Mobile Care Broker for Fulton County, GA (13121).",
         instruction=BROKER_COORDINATOR_PROMPT,
         model=model,
-        tools=[
-            analyze_burden_and_barriers,
-            analyze_spatial_access_and_shortages,
-            get_field_reports,
-        ],
+        tools=root_tools,
         sub_agents=[planner, auditor, communicator],
     )
 
