@@ -726,17 +726,19 @@ def rank_candidate_tracts(
             tool_context.state["pass1_candidate_plan"] = plan_payload
         else:
             tool_context.state["pass2_candidate_plan"] = plan_payload
+        tool_context.state["candidate_plan_payload"] = plan_payload
         tool_context.state["candidate_plan"] = plan_payload
 
     return plan_payload
 
 
 def audit_candidate_plan(
+    candidate_tract_ids: list[str] | None = None,
     tool_context: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Adversarial Clinical Rigor & Post-Hoc Equity Audit of `session.state['candidate_plan']`.
 
-    Exclusively called by `equity_and_rigor_auditor`. Performs:
+    Exclusively called by `auditor_agent` / `equity_and_rigor_auditor`. Performs:
     1. Pairwise spatial cannibalization / corridor clustering check (< 3.5 km threshold).
     2. Statistical significance check using CDC PLACES 95% confidence intervals (`_crude95ci`).
     3. Safety-net capacity illusion & transit-lock coverage check.
@@ -746,13 +748,23 @@ def audit_candidate_plan(
     """
     candidate_plan = None
     if tool_context is not None:
-        candidate_plan = tool_context.state.get("candidate_plan")
+        candidate_plan = (
+            tool_context.state.get("pass2_candidate_plan")
+            or tool_context.state.get("candidate_plan_payload")
+            or tool_context.state.get("candidate_plan")
+        )
+        if isinstance(candidate_plan, str):
+            try:
+                candidate_plan = json.loads(candidate_plan)
+            except Exception:
+                candidate_plan = None
 
-    if not candidate_plan or not candidate_plan.get("selected_stops"):
-        return {
-            "verdict": "REJECT",
-            "reason": "No `candidate_plan` found in `session.state`. Planner must run `rank_candidate_tracts` first.",
-        }
+    if not isinstance(candidate_plan, dict) or not candidate_plan.get("selected_stops"):
+        if candidate_tract_ids:
+            stops = [{"geo_id": str(tid).strip(), "rank": i + 1} for i, tid in enumerate(candidate_tract_ids)]
+            candidate_plan = {"plan_version": "custom", "selected_stops": stops}
+        else:
+            candidate_plan = rank_candidate_tracts(county_fips="13121", pass_mode="pass2_audited_composite", tool_context=tool_context)
 
     stops = candidate_plan["selected_stops"]
     tract_ids = [s["geo_id"] for s in stops]
@@ -1031,6 +1043,7 @@ def audit_candidate_plan(
     audit_result = clean_json(audit_result)
 
     if tool_context is not None:
+        tool_context.state["equity_audit"] = audit_result
         tool_context.state["audit_verdict"] = verdict
         if verdict == "REJECT":
             tool_context.state["rejected_first_plan"] = candidate_plan
