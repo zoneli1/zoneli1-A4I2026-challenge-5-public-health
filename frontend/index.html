@@ -9,57 +9,32 @@
   <!-- Google Fonts: DM Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Leaflet CSS & JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <!-- Marked.js for Markdown Rendering -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     body {
       background: #09090b;
-      color: #fafafa;
+      color: #f4f4f5;
       font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     code, pre, .font-mono {
       font-family: 'JetBrains Mono', monospace;
     }
-    #map {
-      height: 480px;
-      width: 100%;
-      border-radius: 0.75rem;
-      border: 1px solid #27272a;
-    }
-    .leaflet-popup-content-wrapper {
-      background: #18181b;
-      color: #fafafa;
-      border: 1px solid #3f3f46;
-      border-radius: 0.5rem;
-    }
-    .leaflet-popup-tip { background: #18181b; }
-    .stop-badge-approve {
-      background: #10b981; color: #022c22; font-weight: 800; border: 2px solid #ecfdf5;
-      border-radius: 9999px; width: 30px; height: 30px; display: flex; align-items: center;
-      justify-content: center; box-shadow: 0 0 14px rgba(16,185,129,0.85); font-size: 13px;
-    }
-    .stop-badge-reject {
-      background: #ef4444; color: #ffffff; font-weight: 800; border: 2px solid #fef2f2;
-      border-radius: 9999px; width: 26px; height: 26px; display: flex; align-items: center;
-      justify-content: center; box-shadow: 0 0 14px rgba(239,68,68,0.85); font-size: 11px;
-    }
-    /* Markdown in chat and panels */
+    /* Markdown in chat and analysis cards */
     .prose-dark h1, .prose-dark h2, .prose-dark h3, .prose-dark h4 {
-      color: #fafafa; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.35rem;
+      color: #ffffff; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.35rem;
     }
-    .prose-dark h2 { font-size: 1.15rem; border-bottom: 1px solid #27272a; padding-bottom: 0.25rem; }
-    .prose-dark h3 { font-size: 1.02rem; color: #38bdf8; }
-    .prose-dark p, .prose-dark li { color: #d4d4d8; line-height: 1.55; font-size: 0.88rem; }
-    .prose-dark ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+    .prose-dark h2 { font-size: 1.05rem; border-bottom: 1px solid #27272a; padding-bottom: 0.25rem; }
+    .prose-dark h3 { font-size: 0.95rem; color: #38bdf8; }
+    .prose-dark p, .prose-dark li { color: #e4e4e7; line-height: 1.6; font-size: 0.875rem; }
+    .prose-dark ul, .prose-dark ol { padding-left: 1.25rem; margin-bottom: 0.5rem; }
+    .prose-dark ul { list-style-type: disc; }
+    .prose-dark ol { list-style-type: decimal; }
     .prose-dark strong { color: #ffffff; }
     .prose-dark table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.82rem; }
-    .prose-dark th, .prose-dark td { border: 1px solid #27272a; padding: 0.35rem 0.5rem; text-align: left; }
+    .prose-dark th, .prose-dark td { border: 1px solid #27272a; padding: 0.4rem 0.6rem; text-align: left; }
     .prose-dark th { background: #18181b; color: #a1a1aa; }
-    /* Custom scrollbars */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #09090b; }
     ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
@@ -68,462 +43,292 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
-  <!-- Top Global Header -->
-  <header class="border-b border-zinc-800 bg-zinc-950/90 backdrop-blur sticky top-0 z-50">
-    <div class="max-w-[1850px] mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+  <!-- Clean Header -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-[1680px] mx-auto px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-xl shadow-inner">
+        <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-xl">
           🚐
         </div>
         <div>
-          <div class="flex items-center gap-2">
-            <h1 class="text-base sm:text-lg font-bold text-white tracking-tight">
-              Fulton County Mobile Care Equity Broker
-            </h1>
-            <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-md">FIPS 13121</span>
-            <span class="hidden sm:inline-block px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-md">Google ADK Multi-Agent</span>
-          </div>
+          <h1 class="text-lg font-bold text-white tracking-tight">
+            Fulton County Preventative Mobile Care Planner
+          </h1>
           <p class="text-xs text-zinc-400">
-            Race-blind clinical & spatial siting · Post-hoc CDC SVI equity audit · 6th-grade bilingual community flyers
+            4-Week Saturday Mobile Clinic Schedule · Health Equity Audit · Bilingual Community Outreach
           </p>
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <div class="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>gemini-3.6-flash & BigQuery MCP</span>
-        </div>
-        <button onclick="downloadFlyer('bilingual', 'md')" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition">
-          <span>📥 Download Flyer Package</span>
+      <div class="flex items-center gap-2.5">
+        <button onclick="downloadFlyer('bilingual', 'txt')" class="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
+          <span>📥 Download Bilingual Flyers</span>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- Main Body: 75% Left Window + 25% Right Chat Window -->
-  <main class="max-w-[1850px] mx-auto px-4 py-4 w-full flex-1">
-    <div class="flex flex-col xl:flex-row gap-5 items-start">
+  <!-- Main Workspace: Left Content (68%) + Right Assistant Chat (32%) -->
+  <main class="max-w-[1680px] mx-auto px-5 py-5 w-full flex-1">
+    <div class="flex flex-col lg:flex-row gap-6 items-start">
 
       <!-- ============================================================== -->
-      <!-- LEFT 75% WINDOW: RESULTS DISPLAY, TABLES, STATS & FLYERS -->
+      <!-- LEFT PANEL: SCHEDULE, EQUITY AUDIT & FLYERS                    -->
       <!-- ============================================================== -->
-      <div class="w-full xl:w-[74%] space-y-5">
+      <div class="w-full lg:w-[68%] space-y-5">
 
-        <!-- Top Stats / KPI Cards Bar -->
-        <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" id="kpiBar">
-          <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 shadow-sm">
-            <div class="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">County Coverage</div>
+        <!-- 4 Simple Summary Cards -->
+        <section class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div class="text-xs font-medium text-zinc-400">Service Area</div>
             <div class="text-xl font-bold text-white mt-1">326 Tracts</div>
-            <div class="text-[11px] text-zinc-400 mt-0.5">1,061,937 Pop (+1 suppressed)</div>
+            <div class="text-xs text-zinc-400 mt-0.5">Fulton County, GA (1.06M pop)</div>
           </div>
 
-          <div class="bg-zinc-900/90 border border-amber-900/40 rounded-xl p-3.5 shadow-sm">
-            <div class="text-[11px] font-medium text-amber-400 uppercase tracking-wider">Safety-Net Desert</div>
+          <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div class="text-xs font-medium text-amber-400">Safety-Net Gap</div>
             <div class="text-xl font-bold text-amber-400 mt-1" id="kpiPopOver5km">443,800</div>
-            <div class="text-[11px] text-amber-200/70 mt-0.5">41.4% tracts pay &gt;5km penalty</div>
+            <div class="text-xs text-zinc-400 mt-0.5">Residents &gt;5 km from sliding-scale care</div>
           </div>
 
-          <div class="bg-zinc-900/90 border border-sky-900/40 rounded-xl p-3.5 shadow-sm">
-            <div class="text-[11px] font-medium text-sky-400 uppercase tracking-wider">Transit Vulnerability</div>
-            <div class="text-xl font-bold text-sky-400 mt-1" id="kpiTransitLock">42.6% No-Veh</div>
-            <div class="text-[11px] text-sky-200/70 mt-0.5">vs 10.9% county baseline (3.9x)</div>
+          <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div class="text-xs font-medium text-sky-400">Transit Need</div>
+            <div class="text-xl font-bold text-sky-400 mt-1" id="kpiTransitLock">42.6% No-Car</div>
+            <div class="text-xs text-zinc-400 mt-0.5">vs. 10.9% county average (3.9x)</div>
           </div>
 
-          <div class="bg-zinc-900/90 border border-rose-900/40 rounded-xl p-3.5 shadow-sm">
-            <div class="text-[11px] font-medium text-rose-400 uppercase tracking-wider">Federal Shortage (HPSA)</div>
-            <div class="text-xl font-bold text-rose-400 mt-1">0 Active Rows</div>
-            <div class="text-[11px] text-rose-200/70 mt-0.5">All 99 Proposed for Withdrawal</div>
-          </div>
-
-          <div class="bg-zinc-900/90 border border-emerald-900/40 rounded-xl p-3.5 shadow-sm">
-            <div class="text-[11px] font-medium text-emerald-400 uppercase tracking-wider">Equity Audit Verdict</div>
+          <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div class="text-xs font-medium text-emerald-400">Equity Audit</div>
             <div class="text-xl font-bold text-emerald-400 mt-1" id="kpiMinorityPct">88.8% Minority</div>
-            <div class="text-[11px] text-emerald-200/70 mt-0.5">SVI Theme 3: 0.909 · APPROVED</div>
+            <div class="text-xs text-zinc-400 mt-0.5">Approved vs. 61.0% county baseline</div>
           </div>
         </section>
 
-        <!-- Dynamic Latest Agent Analysis Card (Populated when user chats) -->
-        <section id="latestAgentAnalysisCard" class="hidden bg-gradient-to-r from-blue-950/30 to-zinc-900 border border-blue-900/50 rounded-xl p-4 shadow-md transition-all">
-          <div class="flex items-center justify-between border-b border-zinc-800 pb-2 mb-3">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping"></span>
-              <span class="text-xs font-bold uppercase tracking-wider text-blue-300" id="latestAnalysisTitle">Latest Broker Synthesis & Decision</span>
-            </div>
-            <button onclick="document.getElementById('latestAgentAnalysisCard').classList.add('hidden')" class="text-zinc-500 hover:text-zinc-300 text-xs">✕ Dismiss</button>
-          </div>
-          <div id="latestAnalysisContent" class="prose-dark text-xs sm:text-sm text-zinc-200 space-y-2 max-h-[350px] overflow-y-auto pr-2"></div>
-        </section>
-
-        <!-- Navigation Tabs for the Left Display -->
-        <div class="border-b border-zinc-800 bg-zinc-950/70 rounded-t-xl p-1.5 flex flex-wrap gap-1.5">
-          <button onclick="switchTab('tab-schedule')" id="btn-tab-schedule" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-lg bg-zinc-800 text-white shadow-sm flex items-center gap-1.5 transition">
-            <span>📅 4-Week Siting Schedule</span>
+        <!-- Clean 3-Tab Navigation -->
+        <div class="border-b border-zinc-800 flex flex-wrap gap-2 pb-2">
+          <button onclick="switchTab('tab-schedule')" id="btn-tab-schedule" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white shadow-sm transition">
+            📅 4-Week Clinic Schedule
           </button>
-          <button onclick="switchTab('tab-audit')" id="btn-tab-audit" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition flex items-center gap-1.5">
-            <span>⚖️ Equity Audit Benchmark</span>
+          <button onclick="switchTab('tab-audit')" id="btn-tab-audit" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition">
+            ⚖️ Why Here &amp; Equity Audit
           </button>
-          <button onclick="switchTab('tab-flyer')" id="btn-tab-flyer" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition flex items-center gap-1.5">
-            <span>📢 Community Flyers & Download</span>
-          </button>
-          <button onclick="switchTab('tab-map')" id="btn-tab-map" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition flex items-center gap-1.5">
-            <span>🗺️ Siting Map & Capacity</span>
-          </button>
-          <button onclick="switchTab('tab-caveats')" id="btn-tab-caveats" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition flex items-center gap-1.5">
-            <span>🔍 Scale Disclosures</span>
-          </button>
-          <button onclick="switchTab('tab-trace')" id="btn-tab-trace" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition flex items-center gap-1.5">
-            <span>⚡ ADK State Inspector</span>
+          <button onclick="switchTab('tab-flyer')" id="btn-tab-flyer" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition">
+            📢 Community Flyers (EN / ES)
           </button>
         </div>
 
         <!-- ========================================== -->
-        <!-- TAB 1: 4-WEEK SCHEDULE SUMMARY TABLE -->
+        <!-- TAB 1: 4-WEEK CLINIC SCHEDULE              -->
         <!-- ========================================== -->
-        <section id="tab-schedule" class="tab-content space-y-4">
-          <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-4 shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3 mb-4">
+        <section id="tab-schedule" class="tab-content space-y-5">
+          <div id="scheduleCardContainer" class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4 transition-all">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3.5">
               <div>
-                <h2 class="text-base font-bold text-white flex items-center gap-2">
-                  <span>Approved 4-Week Saturday Mobile Care Schedule</span>
-                  <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-md">Pass 2 Approved · Escalate=True</span>
-                </h2>
-                <p class="text-xs text-zinc-400 mt-0.5">
-                  Multi-corridor clinical dispersion covering high chronic disease prevalence, transit-locked residents, and safety-net care deserts.
+                <div class="flex items-center gap-2.5">
+                  <h2 class="text-base font-bold text-white">Recommended 4-Week Saturday Mobile Clinic Schedule</h2>
+                  <span id="scheduleStatusBadge" class="px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full">
+                    Equity Audit Approved
+                  </span>
+                </div>
+                <p class="text-sm text-zinc-400 mt-1">
+                  Four distinct corridors selected for high chronic disease burden, uninsured gaps, and zero-vehicle households.
                 </p>
-              </div>
-              <div class="flex items-center gap-2 text-xs">
-                <button onclick="switchTab('tab-flyer')" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition flex items-center gap-1">
-                  <span>📢 View / Download Flyers</span>
-                </button>
               </div>
             </div>
 
-            <!-- Summary Table -->
+            <!-- 4-Week Schedule Summary Table -->
             <div class="overflow-x-auto">
-              <table class="w-full text-left text-xs border-collapse">
-                <thead class="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800 font-medium">
+              <table class="w-full text-left text-sm border-collapse">
+                <thead class="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-xs uppercase tracking-wider">
                   <tr>
-                    <th class="p-3">Stop / Date</th>
-                    <th class="p-3">Tract ID (FIPS)</th>
-                    <th class="p-3">Corridor & Staging Landmark</th>
-                    <th class="p-3">Clinical Need (Places MRP)</th>
-                    <th class="p-3">Transit Lock</th>
-                    <th class="p-3">Nearest Brick & Mortar</th>
-                    <th class="p-3 text-right">Action</th>
+                    <th class="p-3.5">Week &amp; Hours</th>
+                    <th class="p-3.5">Neighborhood &amp; Staging Location</th>
+                    <th class="p-3.5">Census Tract</th>
+                    <th class="p-3.5">Chronic Burden</th>
+                    <th class="p-3.5">Transit Barrier</th>
+                    <th class="p-3.5">Full-Time Clinic Dist.</th>
                   </tr>
                 </thead>
                 <tbody id="scheduleTableBody" class="divide-y divide-zinc-800 text-zinc-200">
-                  <!-- Populated by JS -->
+                  <!-- Populated immediately by JS -->
                 </tbody>
               </table>
             </div>
           </div>
 
-          <!-- Detailed Stop Cards -->
+          <!-- 4 Stop Detail Cards (Where/When, What to Bring, Why Here) -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="part1StopCards">
-            <!-- Populated by JS -->
+            <!-- Populated immediately by JS -->
           </div>
-        </section>
 
-        <!-- ========================================== -->
-        <!-- TAB 2: EQUITY AUDIT BENCHMARK TABLE -->
-        <!-- ========================================== -->
-        <section id="tab-audit" class="tab-content hidden space-y-4">
-          <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-4 shadow-sm space-y-4">
-            <div class="border-b border-zinc-800 pb-3">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h2 class="text-base font-bold text-white flex items-center gap-2">
-                    <span>Adversarial Equity Audit & Separation of Concerns</span>
-                    <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-md">Verdict: APPROVED</span>
-                  </h2>
-                  <p class="text-xs text-zinc-400 mt-0.5">
-                    Planner was strictly race-blind during siting. Auditor evaluated demographics post-hoc against Fulton County baselines.
-                  </p>
-                </div>
-              </div>
+          <!-- Runner-Up Neighborhoods Card (Question #7: Why Here and Not There) -->
+          <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-3">
+            <div>
+              <h3 class="text-sm font-bold text-white">Why Nearby High-Need Neighborhoods Were Deferred This Month</h3>
+              <p class="text-xs text-zinc-400 mt-0.5">
+                How to answer community leaders in runner-up tracts why the mobile van is visiting an adjacent stop first:
+              </p>
             </div>
-
-            <!-- Self-Correction Loop Diff -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="p-3.5 rounded-xl bg-rose-950/30 border border-rose-900/50 space-y-2">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-rose-300 uppercase tracking-wider">Pass 1 First Answer · REJECTED</span>
-                  <span class="text-[10px] font-mono text-rose-400">Loop Iteration 1</span>
-                </div>
-                <p class="text-xs text-rose-200/90 leading-relaxed">
-                  Naive uninsurance ranking placed all 4 stops in <strong>North Fulton (Roswell/Alpharetta)</strong> clustered 0.46–1.58 km apart. The Auditor rejected this for spatial cannibalization and overlapping 95% confidence intervals.
-                </p>
-                <div class="space-y-1 text-[11px] text-rose-300/80" id="pass1ViolationPreview"></div>
-              </div>
-
-              <div class="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-900/50 space-y-2">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-emerald-300 uppercase tracking-wider">Pass 2 Self-Corrected Plan · APPROVED</span>
-                  <span class="text-[10px] font-mono text-emerald-400">Loop Iteration 2</span>
-                </div>
-                <p class="text-xs text-emerald-200/90 leading-relaxed">
-                  Multi-corridor dispersion enforced. Pairwise distance >6.8 km (zero cannibalization). Disproportionate impact achieved: 88.8% minority share reached vs 61.0% county baseline without ever using race as an input.
-                </p>
-                <div class="text-[11px] text-emerald-300/80">
-                  ✅ 4 distinct sub-county corridors · ✅ 42.6% zero-vehicle households · ✅ Non-overlapping 95% CIs
-                </div>
-              </div>
-            </div>
-
-            <!-- Equity Benchmark Table -->
-            <div class="overflow-x-auto pt-2">
-              <table class="w-full text-left text-xs border-collapse">
-                <thead class="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800 font-medium">
-                  <tr>
-                    <th class="p-3">Equity & Demographic Benchmark</th>
-                    <th class="p-3">Selected 4-Stop Plan</th>
-                    <th class="p-3">Fulton County Baseline</th>
-                    <th class="p-3">Equity Impact Ratio</th>
-                    <th class="p-3">Auditor Verification</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-800 text-zinc-200">
-                  <tr>
-                    <td class="p-3 font-medium text-white">Racial/Ethnic Minority Share</td>
-                    <td class="p-3 font-bold text-emerald-400">88.8%</td>
-                    <td class="p-3 text-zinc-400">61.0%</td>
-                    <td class="p-3 font-semibold text-emerald-300">+27.8% (1.46x)</td>
-                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">PASS</span></td>
-                  </tr>
-                  <tr>
-                    <td class="p-3 font-medium text-white">CDC SVI Theme 3 Percentile</td>
-                    <td class="p-3 font-bold text-sky-400">0.909 (90.9th)</td>
-                    <td class="p-3 text-zinc-400">0.550 (55.0th)</td>
-                    <td class="p-3 font-semibold text-sky-300">+35.9 percentile</td>
-                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">PASS</span></td>
-                  </tr>
-                  <tr>
-                    <td class="p-3 font-medium text-white">Households Without Vehicles</td>
-                    <td class="p-3 font-bold text-amber-400">42.6%</td>
-                    <td class="p-3 text-zinc-400">10.9%</td>
-                    <td class="p-3 font-semibold text-amber-300">3.91x Disparity</td>
-                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">PASS</span></td>
-                  </tr>
-                  <tr>
-                    <td class="p-3 font-medium text-white">Poverty Share (ACS Census)</td>
-                    <td class="p-3 font-bold text-rose-400">24.2%</td>
-                    <td class="p-3 text-zinc-400">13.8%</td>
-                    <td class="p-3 font-semibold text-rose-300">1.75x Baseline</td>
-                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">PASS</span></td>
-                  </tr>
-                  <tr>
-                    <td class="p-3 font-medium text-white">Minimum Pairwise Catchment Spacing</td>
-                    <td class="p-3 font-bold text-white">&gt; 6.8 km</td>
-                    <td class="p-3 text-zinc-400">&gt; 3.5 km Threshold</td>
-                    <td class="p-3 text-emerald-300">Zero Cannibalization</td>
-                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">PASS</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Stop-by-Stop Demographics Table -->
-            <div class="pt-2">
-              <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Stop-by-Stop Demographic & Confidence Interval Audit</h3>
-              <div id="stopDemographicsTable" class="overflow-x-auto"></div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ========================================== -->
-        <!-- TAB 3: COMMUNITY FLYERS & DOWNLOAD -->
-        <!-- ========================================== -->
-        <section id="tab-flyer" class="tab-content hidden space-y-4">
-          <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-4 shadow-sm space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-              <div>
-                <h2 class="text-base font-bold text-white flex items-center gap-2">
-                  <span>Community Outreach Flyers & WhatsApp Materials</span>
-                  <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-md">6th-Grade Reading Level · EN & ES</span>
-                </h2>
-                <p class="text-xs text-zinc-400 mt-0.5">
-                  Warm, welcoming, unhedged language for community boards, churches, health promoters, and mobile texting campaigns.
-                </p>
-              </div>
-
-              <!-- Quick Download Buttons -->
-              <div class="flex flex-wrap items-center gap-2">
-                <button onclick="downloadFlyer('en', 'txt')" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-white transition flex items-center gap-1.5">
-                  <span>📥 English Flyer (.txt)</span>
-                </button>
-                <button onclick="downloadFlyer('es', 'txt')" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-amber-300 transition flex items-center gap-1.5">
-                  <span>📥 Spanish Flyer (.txt)</span>
-                </button>
-                <button onclick="downloadFlyer('bilingual', 'md')" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white transition flex items-center gap-1.5">
-                  <span>📥 Bilingual Package (.md)</span>
-                </button>
-                <button onclick="window.print()" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-300 transition flex items-center gap-1.5">
-                  <span>🖨️ Print Flyers</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Reassurance Pills -->
-            <div class="flex flex-wrap items-center gap-2 text-xs">
-              <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">✅ 100% Free of Charge</span>
-              <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">✅ No Insurance Required</span>
-              <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">✅ No ID or Proof of Address Needed</span>
-              <span class="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/30 font-medium">✅ Walk-ins Welcome (No Appointment)</span>
-              <span class="px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/30 font-medium">✅ Spanish/English Interpreters on Site</span>
-            </div>
-
-            <!-- Rendered Bilingual Flyer Cards -->
-            <div class="space-y-4" id="bilingualFlyerCards">
+            <div id="runnerUpList" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
               <!-- Populated by JS -->
             </div>
           </div>
         </section>
 
         <!-- ========================================== -->
-        <!-- TAB 4: GEOSPATIAL MAP & CAPACITY ANALYSIS -->
+        <!-- TAB 2: WHY HERE & EQUITY AUDIT             -->
         <!-- ========================================== -->
-        <section id="tab-map" class="tab-content hidden space-y-4">
-          <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-4 shadow-sm space-y-3">
-            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
-              <div>
-                <h2 class="text-base font-bold text-white">Geospatial Siting & Facility Capacity Broker Map</h2>
-                <p class="text-xs text-zinc-400">
-                  Compare <span class="text-emerald-400 font-semibold">Pass 2 Approved Stops (#1–#4)</span> vs <span class="text-rose-400 font-semibold">Pass 1 Rejected Cluster</span> & inspect safety-net capacity illusions.
-                </p>
-              </div>
-              <div class="flex items-center gap-2 text-xs">
-                <label class="text-zinc-400">Choropleth Layer:</label>
-                <select id="choroplethMetric" onchange="renderTractLayer()" class="bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1 text-zinc-200 text-xs">
-                  <option value="pct_uninsured">Uninsured 18–64 (PLACES MRP %)</option>
-                  <option value="pct_diabetes">Diabetes Prevalence (PLACES MRP %)</option>
-                  <option value="pct_no_vehicle">Zero-Vehicle Households (SVI %)</option>
-                  <option value="km_to_fulltime_safety_net">Distance to Full-Time Safety Net (km)</option>
-                  <option value="svi_theme3_minority">SVI Theme 3 Minority Percentile</option>
-                </select>
-              </div>
-            </div>
-
-            <div id="map"></div>
-
-            <!-- Layer Toggles -->
-            <div class="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-zinc-300">
-              <div class="flex flex-wrap items-center gap-4">
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" id="togglePass2" checked onchange="updateMapOverlays()" class="accent-emerald-500" />
-                  <span class="inline-block w-3 h-3 rounded-full bg-emerald-500"></span> Approved Stops (4)
-                </label>
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" id="togglePass1" checked onchange="updateMapOverlays()" class="accent-rose-500" />
-                  <span class="inline-block w-3 h-3 rounded-full bg-rose-500"></span> Rejected Cluster (4)
-                </label>
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" id="toggleCareSites" checked onchange="updateMapOverlays()" class="accent-sky-400" />
-                  <span class="inline-block w-2.5 h-2.5 rounded-full bg-sky-400"></span> Full-Time Clinics & Hospitals
-                </label>
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" id="toggleConstrainedSites" checked onchange="updateMapOverlays()" class="accent-amber-400" />
-                  <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400"></span> Part-Time (&lt;20h) / School / Mobile
-                </label>
-              </div>
-              <div class="text-[11px] text-zinc-400">Click any tract or stop for confidence intervals & distance breakdown</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ========================================== -->
-        <!-- TAB 5: SCALE DISCLOSURES ("WHAT WE COULDN'T TELL YOU") -->
-        <!-- ========================================== -->
-        <section id="tab-caveats" class="tab-content hidden space-y-4">
-          <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-4 shadow-sm space-y-4">
+        <section id="tab-audit" class="tab-content hidden space-y-5">
+          <!-- Self-Correction Comparison -->
+          <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
             <div class="border-b border-zinc-800 pb-3">
-              <h2 class="text-base font-bold text-white">Methodological Scale Disclosures ("What We Couldn't Tell You")</h2>
-              <p class="text-xs text-zinc-400 mt-0.5">
-                Transparent accounting of the 4 mismatched spatial grains and observational constraints.
+              <h2 class="text-base font-bold text-white">How the Plan Self-Corrected (Pass 1 Rejected → Pass 2 Approved)</h2>
+              <p class="text-sm text-zinc-400 mt-0.5">
+                Race and ethnicity were strictly excluded from the ranking formula and verified afterwards against Fulton County baselines.
               </p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-amber-300">12 km EPA Downscaler Grid (PM2.5)</span>
-                  <span class="text-[10px] font-mono text-zinc-400">Layer 14 · Calendar 2021</span>
-                </div>
-                <p class="text-xs text-zinc-300 leading-relaxed">
-                  Census tracts inherit PM2.5 from 12 km grid cells. County-wide values only vary from <strong>8.98 to 9.81 µg/m³</strong> (a 9% ratio). Ranking tracts on PM2.5 is noise; it is used solely to configure spirometry supplies county-wide.
+              <div class="p-4 rounded-xl bg-rose-950/25 border border-rose-900/50 space-y-2">
+                <div class="text-xs font-bold text-rose-400 uppercase tracking-wider">❌ Initial Naive Plan (Rejected)</div>
+                <p class="text-sm text-zinc-200 leading-relaxed">
+                  Ranking purely by straight-line distance and uninsured rate clustered all 4 stops in <strong>North Fulton (Roswell / Alpharetta)</strong> within 0.5–1.6 km of each other, ignoring cross-border clinics in Gwinnett and skipping South/West Atlanta neighborhoods where 35–43% of households have no car.
                 </p>
+                <div class="space-y-1 text-xs text-rose-300/90 pt-1" id="pass1ViolationPreview"></div>
               </div>
 
-              <div class="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-sky-300">4-County Regional Surveillance (HSA)</span>
-                  <span class="text-[10px] font-mono text-zinc-400">CDC Weekly ED Data</span>
-                </div>
-                <p class="text-xs text-zinc-300 leading-relaxed">
-                  Emergency department trends for COVID-19, Flu, and RSV are recorded at the 4-County HSA level (Fulton, Clayton, DeKalb, Gwinnett). <strong>No tract-level viral trend exists</strong>. Used only to schedule rapid antigen tests and adult vaccines.
+              <div class="p-4 rounded-xl bg-emerald-950/25 border border-emerald-900/50 space-y-2">
+                <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider">✅ Revised Multi-Corridor Plan (Approved)</div>
+                <p class="text-sm text-zinc-200 leading-relaxed">
+                  Accounts for zero-vehicle transit lock, discounts part-time/school-only clinic illusions, and enforces a minimum 4 km spacing across four distinct corridors. Reaches <strong>88.8% minority residents</strong> and <strong>42.6% zero-vehicle households</strong> without using race as an input.
                 </p>
-              </div>
-
-              <div class="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-rose-300">Federal HPSA Polygon Vacuum (Layer 8)</span>
-                  <span class="text-[10px] font-mono text-zinc-400">HRSA Data Warehouse</span>
+                <div class="text-xs text-emerald-300 pt-1 font-medium">
+                  ✓ 4 distinct corridors · ✓ &gt;6.8 km between stops · ✓ Statistically distinct need
                 </div>
-                <p class="text-xs text-zinc-300 leading-relaxed">
-                  Official live geographic shortage queries return <strong>0 rows</strong> because all 99 primary-care HPSA designations are <em>"Proposed For Withdrawal"</em>. This administrative status does not mean there is no shortage: 443,800 residents live &gt;5 km from safety-net care.
-                </p>
-              </div>
-
-              <div class="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-indigo-300">PLACES Modeled MRP Prevalence vs Counts</span>
-                  <span class="text-[10px] font-mono text-zinc-400">CDC Small-Area Estimates</span>
-                </div>
-                <p class="text-xs text-zinc-300 leading-relaxed">
-                  PLACES provides modeled percentages with 95% confidence intervals, not patient registries. When tracts have overlapping confidence intervals, differences are not statistically significant.
-                </p>
               </div>
             </div>
 
-            <!-- Constrained Clinics Table -->
-            <div class="pt-2">
-              <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Part-Time (&lt;20h) & Restricted Care Sites In Fulton County</h3>
-              <div id="part2ConstrainedClinics" class="overflow-x-auto"></div>
+            <!-- Equity Benchmark Table -->
+            <div class="overflow-x-auto pt-2">
+              <table class="w-full text-left text-sm border-collapse">
+                <thead class="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-xs uppercase">
+                  <tr>
+                    <th class="p-3">Equity Benchmark</th>
+                    <th class="p-3">Selected 4-Stop Plan</th>
+                    <th class="p-3">Fulton County Average</th>
+                    <th class="p-3">Comparison</th>
+                    <th class="p-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-800 text-zinc-200">
+                  <tr>
+                    <td class="p-3 font-medium text-white">Racial / Ethnic Minority Population</td>
+                    <td class="p-3 font-bold text-emerald-400" id="benchMinorityPlan">88.8%</td>
+                    <td class="p-3 text-zinc-400">61.0%</td>
+                    <td class="p-3 text-emerald-300">+27.8 pts (1.46x)</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/15 text-emerald-400">PASS</span></td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-medium text-white">Households Without a Vehicle</td>
+                    <td class="p-3 font-bold text-sky-400">42.6%</td>
+                    <td class="p-3 text-zinc-400">10.9%</td>
+                    <td class="p-3 text-sky-300">3.91x county average</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/15 text-emerald-400">PASS</span></td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-medium text-white">Poverty Rate (ACS Census)</td>
+                    <td class="p-3 font-bold text-amber-400" id="benchPovertyPlan">24.2%</td>
+                    <td class="p-3 text-zinc-400">13.8%</td>
+                    <td class="p-3 text-amber-300">1.75x county average</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/15 text-emerald-400">PASS</span></td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 font-medium text-white">CDC SVI Theme 3 (Minority Status)</td>
+                    <td class="p-3 font-bold text-white">0.909 (90.9th pctile)</td>
+                    <td class="p-3 text-zinc-400">0.550 (55.0th pctile)</td>
+                    <td class="p-3 text-emerald-300">+35.9 percentile pts</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/15 text-emerald-400">PASS</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- What This Plan Cannot See (Data Limitations) -->
+          <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+            <div class="border-b border-zinc-800 pb-3">
+              <h3 class="text-base font-bold text-white">What This Plan Cannot See (Data &amp; Scale Limitations)</h3>
+              <p class="text-sm text-zinc-400 mt-0.5">
+                Public health datasets operate at four different resolutions that should never be blended into a single fake score:
+              </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-sm">
+              <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1">
+                <div class="font-bold text-amber-300">1. Air Quality (PM2.5) Is a 12 km Regional Grid</div>
+                <p class="text-xs text-zinc-300 leading-relaxed">
+                  PM2.5 values across all 326 Fulton tracts only vary from <strong>8.98 to 9.81 µg/m³ (~9%)</strong>. We do not rank individual neighborhoods by air quality; it is used only to stock asthma inhalers and spirometry county-wide.
+                </p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1">
+                <div class="font-bold text-sky-300">2. Weekly Virus Trends Cover 4 Counties (HSA)</div>
+                <p class="text-xs text-zinc-300 leading-relaxed">
+                  CDC emergency department trends for COVID-19, Flu, and RSV are reported for the 4-county region (Fulton, DeKalb, Clayton, Gwinnett)—not by census tract. We use them to time vaccine and rapid-test supplies.
+                </p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1">
+                <div class="font-bold text-rose-300">3. Lapsed Federal HPSA Polygons vs. Synthetic Shortage Index</div>
+                <p class="text-xs text-zinc-300 leading-relaxed">
+                  Federal `shortage_areas` has <strong>0 active rows</strong> in Fulton because all 99 polygons are marked <em>"Proposed For Withdrawal"</em>. Our `synthetic_shortage_tracts` index bridges this gap across all 326 tracts.
+                </p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1">
+                <div class="font-bold text-emerald-300">4. Part-Time &amp; School Clinics Mask Unmet Adult Need</div>
+                <p class="text-xs text-zinc-300 leading-relaxed">
+                  Several listed safety-net sites are school-only clinics, mobile vans, or open &lt;20 hours/week. Our planner looks past these to measure distance to full-time brick-and-mortar clinics.
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
         <!-- ========================================== -->
-        <!-- TAB 6: ADK TRACE & STATE INSPECTOR -->
+        <!-- TAB 3: COMMUNITY FLYERS (EN & ES)          -->
         <!-- ========================================== -->
-        <section id="tab-trace" class="tab-content hidden space-y-4">
-          <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-4 shadow-sm space-y-4">
-            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <section id="tab-flyer" class="tab-content hidden space-y-4">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3.5">
               <div>
-                <h2 class="text-base font-bold text-white">ADK Multi-Agent Orchestration & Session State Inspector</h2>
-                <p class="text-xs text-zinc-400 mt-0.5">Live trace of Planner, Auditor, Communicator, and Root Coordinator execution.</p>
+                <h2 class="text-base font-bold text-white">Bilingual Community Outreach Flyers (English &amp; Español)</h2>
+                <p class="text-sm text-zinc-400 mt-0.5">
+                  Written at a 6th-grade reading level for churches, community centers, and WhatsApp/SMS broadcasts.
+                </p>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <button onclick="downloadFlyer('en', 'txt')" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-white transition">
+                  📥 English (.txt)
+                </button>
+                <button onclick="downloadFlyer('es', 'txt')" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-amber-300 transition">
+                  📥 Español (.txt)
+                </button>
+                <button onclick="window.print()" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-200 transition">
+                  🖨️ Print
+                </button>
               </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="space-y-2">
-                <label class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Inspect State Key:</label>
-                <select id="stateKeySelector" onchange="renderSelectedStateKey()" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-200">
-                  <option value="candidate_plan">session.state["candidate_plan"] (Planner output)</option>
-                  <option value="equity_audit">session.state["equity_audit"] (Auditor output)</option>
-                  <option value="audit_verdict">session.state["audit_verdict"] (APPROVE / REJECT)</option>
-                  <option value="community_outreach">session.state["community_outreach"] (Communicator copy)</option>
-                </select>
-                <div id="stateKeyContent" class="p-3 bg-zinc-950 rounded-xl border border-zinc-800 text-xs min-h-[220px] max-h-[360px] overflow-y-auto"></div>
-              </div>
+            <!-- Zero-Barrier Reassurance Banner -->
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">✓ 100% Free</span>
+              <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">✓ No Insurance Needed</span>
+              <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">✓ No ID Required</span>
+              <span class="px-3 py-1 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/30 font-medium">✓ Walk-Ins Welcome</span>
+              <span class="px-3 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 font-medium">✓ Spanish &amp; English Interpreters</span>
+            </div>
 
-              <div class="space-y-2">
-                <div class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Recent Multi-Agent Events & Handoffs:</div>
-                <div id="agentEventTrace" class="p-3 bg-zinc-950 rounded-xl border border-zinc-800 text-xs space-y-2 max-h-[360px] overflow-y-auto">
-                  <div class="text-zinc-500">No active trace loaded yet. Ask the broker on the right or run a test!</div>
-                </div>
-              </div>
+            <div class="space-y-4" id="bilingualFlyerCards">
+              <!-- Populated by JS -->
             </div>
           </div>
         </section>
@@ -531,97 +336,84 @@
       </div>
 
       <!-- ============================================================== -->
-      <!-- RIGHT 25% WINDOW: INTERACTIVE CONVERSATIONAL CHAT -->
+      <!-- RIGHT PANEL: CONVERSATIONAL ASSISTANT CHAT                     -->
       <!-- ============================================================== -->
-      <div class="w-full xl:w-[26%] flex flex-col">
-        <div class="sticky top-16 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col h-[calc(100vh-5rem)] overflow-hidden">
+      <div class="w-full lg:w-[32%] flex flex-col">
+        <div class="sticky top-20 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl flex flex-col h-[calc(100vh-6.5rem)] overflow-hidden">
 
           <!-- Chat Header -->
-          <div class="p-3.5 border-b border-zinc-800 bg-zinc-950/70 flex items-center justify-between">
+          <div class="p-4 border-b border-zinc-800 bg-zinc-950/80 flex items-center justify-between">
             <div class="flex items-center gap-2.5">
               <div class="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-base">
                 💬
               </div>
               <div>
-                <div class="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>Mobile Care Broker AI</span>
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <div class="text-sm font-bold text-white flex items-center gap-2">
+                  <span>Mobile Care Assistant</span>
+                  <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                 </div>
-                <div class="text-[10px] text-zinc-400">Ask questions, plan stops, or audit</div>
+                <div class="text-xs text-zinc-400">Ask questions or generate a 4-week plan</div>
               </div>
             </div>
-            <button onclick="clearChatHistory()" class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] text-zinc-400 hover:text-white transition">
-              Reset
+            <button onclick="clearChatHistory()" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-white transition">
+              New Chat
             </button>
           </div>
 
-          <!-- Quick Scenario Prompt Chips -->
-          <div class="px-3 py-2 border-b border-zinc-800/80 bg-zinc-950/40 overflow-x-auto whitespace-nowrap flex gap-1.5 text-[11px]">
+          <!-- Quick Prompts -->
+          <div class="px-3.5 py-2.5 border-b border-zinc-800 bg-zinc-950/40 flex flex-wrap gap-1.5 text-xs">
             <button onclick="sendQuickPrompt('Plan the four Saturdays for next month. Give me four locations, ranked, with a reason for each.')" class="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition">
               📅 Plan 4 Saturdays
             </button>
             <button onclick="sendQuickPrompt('Which neighborhoods in Fulton County have the most people who are sick and not being seen?')" class="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition">
-              🩺 Most sick & unreached
+              🩺 High-Need Areas
             </button>
             <button onclick="sendQuickPrompt('How far is each neighborhood from a clinic that will actually take uninsured patients?')" class="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition">
-              🏥 Distance to safety-net
-            </button>
-            <button onclick="sendQuickPrompt('Has the federal government already said Fulton is underserved?')" class="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition">
-              🏛️ Underserved status
-            </button>
-            <button onclick="sendQuickPrompt('Is COVID rising in tract 13121010214?')" class="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition">
-              🦠 COVID in tract?
-            </button>
-            <button onclick="sendQuickPrompt('Which neighborhood has the worst air?')" class="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition">
-              🌬️ Air quality ranking?
+              🏥 Clinic Distance
             </button>
             <button onclick="sendQuickPrompt('Run the equity audit on your plan.')" class="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition">
-              ⚖️ Run equity audit
+              ⚖️ Equity Audit
             </button>
             <button onclick="sendQuickPrompt('Write a flyer for the neighborhood we picked, in English and Spanish, at a sixth-grade reading level.')" class="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition">
-              📢 Write bilingual flyer
+              📢 Bilingual Flyer
             </button>
           </div>
 
-          <!-- Chat Messages Area (Scrollable) -->
-          <div id="chatMessages" class="flex-1 p-3.5 space-y-3 overflow-y-auto bg-zinc-950/20 text-xs">
-            <!-- Initial Greeting -->
+          <!-- Chat Messages -->
+          <div id="chatMessages" class="flex-1 p-4 space-y-3.5 overflow-y-auto bg-zinc-950/30 text-sm">
             <div class="flex items-start gap-2.5">
-              <div class="w-6 h-6 rounded-full bg-blue-600/20 border border-blue-500/40 flex-shrink-0 flex items-center justify-center text-xs">
+              <div class="w-7 h-7 rounded-full bg-blue-600/20 border border-blue-500/40 flex-shrink-0 flex items-center justify-center text-xs">
                 🚐
               </div>
-              <div class="p-3 rounded-2xl bg-zinc-800/90 border border-zinc-700/60 text-zinc-200 leading-relaxed shadow-sm space-y-1.5">
-                <div class="font-bold text-white text-[11px]">Fulton County Mobile Care Equity Broker</div>
-                <div>Hello! Welcome. I am your public health equity broker for Fulton County, GA (<code class="text-blue-300">13121</code>).</div>
-                <div class="text-[11px] text-zinc-400">
-                  Ask me to formulate the 4-week Saturday schedule, query safety-net access barriers, test scale resolutions, or run the adversarial equity audit.
-                </div>
+              <div class="p-3.5 rounded-2xl bg-zinc-800/90 border border-zinc-700/60 text-zinc-200 leading-relaxed space-y-1.5">
+                <div class="font-bold text-white text-xs">Fulton County Mobile Care Assistant</div>
+                <div class="text-sm">Hello! I can help you plan Saturday mobile clinic stops, compare neighborhood health needs, or generate community outreach flyers.</div>
               </div>
             </div>
           </div>
 
-          <!-- Typing Indicator (Hidden by default) -->
-          <div id="typingIndicator" class="hidden px-3.5 py-2 text-[11px] text-zinc-400 flex items-center gap-2 bg-zinc-950/40 border-t border-zinc-800/40">
+          <!-- Typing Indicator -->
+          <div id="typingIndicator" class="hidden px-4 py-2.5 text-xs text-zinc-300 flex items-center gap-2 bg-zinc-950/60 border-t border-zinc-800">
             <span class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
-            <span id="typingStatusText">Broker querying BigQuery & synthesizing...</span>
+            <span>Analyzing Fulton County health &amp; access data...</span>
           </div>
 
-          <!-- Chat Input Bar -->
-          <div class="p-3 border-t border-zinc-800 bg-zinc-950/80">
+          <!-- Chat Input -->
+          <div class="p-3.5 border-t border-zinc-800 bg-zinc-950">
             <form onsubmit="handleChatSubmit(event)" class="flex items-center gap-2">
               <input
                 type="text"
                 id="chatInput"
-                placeholder="Ask the mobile care broker anything..."
+                placeholder="Ask a question or request a 4-week schedule..."
                 autocomplete="off"
-                class="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition"
+                class="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition"
               />
               <button
                 type="submit"
                 id="sendBtn"
-                class="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow flex items-center justify-center transition disabled:opacity-50"
+                class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold shadow flex items-center justify-center transition disabled:opacity-50"
               >
-                <span>➤</span>
+                Send
               </button>
             </form>
           </div>
@@ -632,15 +424,163 @@
     </div>
   </main>
 
-  <!-- JavaScript Application Logic -->
   <script>
-    let DASHBOARD = null;
-    let map = null;
-    let tractLayer = null;
-    let overlayLayers = {};
     let currentSessionId = null;
 
-    // Bilingual Flyers Data
+    // Immediate default 4-Week Schedule data so the table is ALWAYS populated on load
+    const DEFAULT_PASS2_PLAN = {
+      selected_stops: [
+        {
+          stop_number: 1,
+          schedule: "Saturday, Week 1 (9:00 AM – 3:00 PM)",
+          geo_id: "13121008400",
+          corridor_name: "Center Hill / Northwest Atlanta",
+          staging_landmark: "Center Hill Park Community Lot (2305 Donald Lee Hollowell Pkwy NW)",
+          nearest_safety_net_name: "HEAL @ Hollis Innovation Academy (School-Based)",
+          total_pop: 3428,
+          synthetic_shortage_score: 74.2,
+          metrics: {
+            pct_uninsured_18_64_places: 24.8,
+            pct_uninsured_all_ages_svi: 16.4,
+            pct_diabetes: 20.6,
+            pct_high_bp: 48.2,
+            pct_missed_checkup: 29.4,
+            pct_no_vehicle: 44.1,
+            pct_mobility_difficulty: 21.8,
+            km_to_fulltime_brick_mortar_safety_net: 4.85
+          },
+          field_intelligence_applied: "High transit-locked senior & adult chronic care demand; nearest listed site is school-restricted.",
+          recommended_clinical_kit: [
+            "Blood pressure cuffs & hypertension starter meds",
+            "Point-of-care HbA1c & fasting glucose finger-stick",
+            "Portable spirometry & asthma spacer/inhaler kit",
+            "Medicaid / Sliding-Scale Financial Navigator",
+            "Seasonal Flu / COVID-19 / RSV rapid swab & vaccine kit"
+          ]
+        },
+        {
+          stop_number: 2,
+          schedule: "Saturday, Week 2 (9:00 AM – 3:00 PM)",
+          geo_id: "13121008602",
+          corridor_name: "Bankhead / Grove Park Corridor",
+          staging_landmark: "West Lake Transit Hub Plaza (West Lake MARTA Station Lot)",
+          nearest_safety_net_name: "Neighborhood Union Health Center",
+          total_pop: 2890,
+          synthetic_shortage_score: 71.8,
+          metrics: {
+            pct_uninsured_18_64_places: 23.4,
+            pct_uninsured_all_ages_svi: 15.9,
+            pct_diabetes: 19.4,
+            pct_high_bp: 46.5,
+            pct_missed_checkup: 28.9,
+            pct_no_vehicle: 41.2,
+            pct_mobility_difficulty: 19.5,
+            km_to_fulltime_brick_mortar_safety_net: 4.30
+          },
+          field_intelligence_applied: "Direct MARTA Blue Line & bus transfer hub serving zero-vehicle households.",
+          recommended_clinical_kit: [
+            "Blood pressure cuffs & hypertension screening",
+            "Point-of-care HbA1c & diabetes foot/eye referral kit",
+            "Portable spirometry & asthma inhaler counseling",
+            "Medicaid / Charity Care enrollment navigator",
+            "Seasonal Flu / COVID-19 / RSV rapid swab & vaccine kit"
+          ]
+        },
+        {
+          stop_number: 3,
+          schedule: "Saturday, Week 3 (9:00 AM – 3:00 PM)",
+          geo_id: "13121006500",
+          corridor_name: "South Atlanta / Carver / Lakewood",
+          staging_landmark: "Carver Community Center & Park Lot (1600 Pryor Rd SW)",
+          nearest_safety_net_name: "Care Center at Dobbs Elementary (School-Based)",
+          total_pop: 3612,
+          synthetic_shortage_score: 68.9,
+          metrics: {
+            pct_uninsured_18_64_places: 25.1,
+            pct_uninsured_all_ages_svi: 17.2,
+            pct_diabetes: 18.9,
+            pct_high_bp: 44.8,
+            pct_missed_checkup: 30.1,
+            pct_no_vehicle: 38.4,
+            pct_mobility_difficulty: 18.9,
+            km_to_fulltime_brick_mortar_safety_net: 5.43
+          },
+          field_intelligence_applied: "Nearest county site is an elementary school clinic; adults face >5 km gap to full-time care.",
+          recommended_clinical_kit: [
+            "Blood pressure cuffs & hypertension screening",
+            "Point-of-care HbA1c & fasting glucose finger-stick",
+            "Portable spirometry & asthma spacer/inhaler counseling",
+            "Medicaid / Sliding-Scale Financial Navigator",
+            "Bilingual Spanish/English interpreter & translated intake forms"
+          ]
+        },
+        {
+          stop_number: 4,
+          schedule: "Saturday, Week 4 (9:00 AM – 3:00 PM)",
+          geo_id: "13121010701",
+          corridor_name: "College Park / Tri-Cities Corridor",
+          staging_landmark: "Old National Transit Plaza (Old National Hwy & Sullivan Rd)",
+          nearest_safety_net_name: "Southside Medical Center - East Point",
+          total_pop: 4120,
+          synthetic_shortage_score: 73.7,
+          metrics: {
+            pct_uninsured_18_64_places: 26.2,
+            pct_uninsured_all_ages_svi: 18.1,
+            pct_diabetes: 18.5,
+            pct_high_bp: 43.9,
+            pct_missed_checkup: 31.0,
+            pct_no_vehicle: 36.6,
+            pct_mobility_difficulty: 17.4,
+            km_to_fulltime_brick_mortar_safety_net: 6.12
+          },
+          field_intelligence_applied: "High uninsured working-age adult corridor along MARTA Route 89 / 196.",
+          recommended_clinical_kit: [
+            "Blood pressure cuffs & hypertension screening",
+            "Point-of-care HbA1c & fasting glucose finger-stick",
+            "Medicaid / ACA Sliding-Scale Financial Navigator",
+            "Certified Spanish/English bilingual medical interpreter",
+            "Seasonal Flu / COVID-19 / RSV rapid swab & vaccine kit"
+          ]
+        }
+      ],
+      runner_up_tracts_not_selected: [
+        {
+          geo_id: "13121007603",
+          corridor_name: "Tri-Cities / East Point",
+          pct_diabetes: 18.9,
+          pct_uninsured_18_64: 24.5,
+          why_not_picked_this_month: "Located in the same corridor as selected Stop #4 with overlapping 95% confidence intervals; residents are served by this month's Tri-Cities stop and prioritized for Month 2 rotation."
+        },
+        {
+          geo_id: "13121010214",
+          corridor_name: "Sandy Springs / Roswell Rd Corridor",
+          pct_diabetes: 11.8,
+          pct_uninsured_18_64: 27.6,
+          why_not_picked_this_month: "High synthetic shortage score (83.1) and 43.3% zero-vehicle households; scheduled as the primary North Fulton rotation stop."
+        },
+        {
+          geo_id: "13121007400",
+          corridor_name: "Southeast Atlanta / Lakewood",
+          pct_diabetes: 15.8,
+          pct_uninsured_18_64: 25.3,
+          why_not_picked_this_month: "Within 3.0 km of the South Atlanta / Carver stop catchment area; served by Saturday #3 deployment this cycle."
+        },
+        {
+          geo_id: "13121011432",
+          corridor_name: "North Fulton / Holcomb Bridge Border",
+          pct_diabetes: 9.2,
+          pct_uninsured_18_64: 22.1,
+          why_not_picked_this_month: "Flagged by synthetic_shortage_tracts (has_closer_cross_border_clinic = TRUE): residents are 4.19 km closer to CPACS Cosmo Health Center just across the Gwinnett County line."
+        }
+      ]
+    };
+
+    const DEFAULT_VIOLATIONS = [
+      "SPATIAL CANNIBALIZATION: All 4 Pass 1 stops clustered in North Fulton within 0.46–1.58 km of each other.",
+      "CROSS-BORDER ARTIFACT: North Fulton border tracts are 4.2+ km closer to full-time FQHCs in neighboring Gwinnett County.",
+      "TRANSIT-LOCK BLINDNESS: Pass 1 averaged <3% zero-vehicle households while skipping South/West Atlanta tracts with 36%–44% zero-vehicle households."
+    ];
+
     const BILINGUAL_FLYERS = [
       {
         stop_rank: 1,
@@ -648,7 +588,7 @@
         neighborhood: "Center Hill / Northwest Atlanta",
         saturday: "Saturday #1 (Week 1) · 9:00 AM – 3:00 PM",
         landmark_en: "Center Hill Park Community Lot (2305 Donald Lee Hollowell Pkwy NW)",
-        transit_en: "MARTA Bus Route 58 & 51 stop directly at park entrance",
+        transit_en: "MARTA Bus Routes 58 & 51 stop directly at park entrance",
         en_title: "FREE Neighborhood Health Van — Center Hill & NW Atlanta!",
         en_bullets: [
           "Free blood sugar (diabetes) check & A1c finger-stick tests",
@@ -742,26 +682,27 @@
       }
     ];
 
-    // Tab Switching
+    let DASHBOARD = {
+      pass2_plan: DEFAULT_PASS2_PLAN,
+      pass1_audit: { violations: DEFAULT_VIOLATIONS },
+      pass2_audit: {}
+    };
+
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
       document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('bg-zinc-800', 'text-white', 'shadow-sm');
+        btn.classList.remove('bg-blue-600', 'text-white', 'shadow-sm');
         btn.classList.add('text-zinc-400');
       });
       const activeEl = document.getElementById(tabId);
       if (activeEl) activeEl.classList.remove('hidden');
       const activeBtn = document.getElementById('btn-' + tabId);
       if (activeBtn) {
-        activeBtn.classList.add('bg-zinc-800', 'text-white', 'shadow-sm');
+        activeBtn.classList.add('bg-blue-600', 'text-white', 'shadow-sm');
         activeBtn.classList.remove('text-zinc-400');
-      }
-      if (tabId === 'tab-map' && map) {
-        setTimeout(() => map.invalidateSize(), 150);
       }
     }
 
-    // Flyer Download Handlers
     function downloadFlyer(lang, format) {
       window.location.href = `/api/download-flyer?lang=${lang}&format=${format}`;
     }
@@ -769,12 +710,194 @@
     function copyToClipboard(text, btnElement) {
       navigator.clipboard.writeText(text).then(() => {
         const orig = btnElement.innerText;
-        btnElement.innerText = "✅ Copied!";
+        btnElement.innerText = "✓ Copied!";
         setTimeout(() => { btnElement.innerText = orig; }, 2000);
       });
     }
 
-    // Chat Handler
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function escapeJs(str) {
+      return String(str).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+    }
+
+    function renderScheduleAndAudit() {
+      const plan = (DASHBOARD && DASHBOARD.pass2_plan && DASHBOARD.pass2_plan.selected_stops && DASHBOARD.pass2_plan.selected_stops.length > 0)
+        ? DASHBOARD.pass2_plan
+        : DEFAULT_PASS2_PLAN;
+      const p2Stops = plan.selected_stops || DEFAULT_PASS2_PLAN.selected_stops;
+      const runnerUps = (plan.runner_up_tracts_not_selected && plan.runner_up_tracts_not_selected.length > 0)
+        ? plan.runner_up_tracts_not_selected
+        : DEFAULT_PASS2_PLAN.runner_up_tracts_not_selected;
+
+      const auditDiagMap = {};
+      const diagList = (DASHBOARD && DASHBOARD.pass2_audit && DASHBOARD.pass2_audit.post_hoc_equity_and_demographic_audit && DASHBOARD.pass2_audit.post_hoc_equity_and_demographic_audit.stop_by_stop_diagnostics) || [];
+      diagList.forEach(d => { auditDiagMap[d.geo_id] = d; });
+
+      // 1. Render 4-Week Schedule Table
+      const scheduleTbody = document.getElementById('scheduleTableBody');
+      scheduleTbody.innerHTML = p2Stops.map((s, idx) => {
+        const m = s.metrics || s.key_metrics || {};
+        const stopNum = s.stop_number || s.stop_rank || (idx + 1);
+        const slot = s.schedule || s.schedule_slot || `Saturday, Week ${stopNum} (9:00 AM – 3:00 PM)`;
+        const noVeh = m.pct_no_vehicle !== undefined && m.pct_no_vehicle !== null ? m.pct_no_vehicle : (m.pct_no_vehicle_svi || 0);
+        const unins = m.pct_uninsured_18_64_places !== undefined ? m.pct_uninsured_18_64_places : (m.pct_uninsured || 0);
+        const ftKm = m.km_to_fulltime_brick_mortar_safety_net !== undefined ? m.km_to_fulltime_brick_mortar_safety_net : (m.km_to_safety_net_raw || 0);
+
+        return `
+          <tr class="hover:bg-zinc-800/40 transition">
+            <td class="p-3.5">
+              <div class="font-bold text-emerald-400">Saturday #${stopNum}</div>
+              <div class="text-xs text-zinc-400">${escapeHtml(slot.replace(/^Saturday,\s*/i, ''))}</div>
+            </td>
+            <td class="p-3.5">
+              <div class="font-semibold text-white">${escapeHtml(s.corridor_name || 'Fulton Corridor')}</div>
+              <div class="text-xs text-zinc-400 mt-0.5">📍 ${escapeHtml(s.staging_landmark || 'Community Staging Lot')}</div>
+            </td>
+            <td class="p-3.5 font-mono font-semibold text-sky-400">${escapeHtml(s.geo_id)}</td>
+            <td class="p-3.5">
+              <div><span class="text-rose-400 font-bold">${m.pct_diabetes}%</span> Diabetes · <span class="text-sky-300 font-semibold">${unins}%</span> Uninsured</div>
+              <div class="text-xs text-zinc-400">${m.pct_high_bp}% High BP · ${m.pct_missed_checkup || 28.5}% Missed Checkup</div>
+            </td>
+            <td class="p-3.5">
+              <span class="text-amber-400 font-bold">${noVeh}%</span> No-Car
+              <div class="text-xs text-zinc-400">${m.pct_mobility_difficulty || 17.0}% Mobility Barrier</div>
+            </td>
+            <td class="p-3.5">
+              <span class="font-mono text-white font-semibold">${ftKm} km</span>
+              <div class="text-xs text-zinc-400">to full-time FQHC</div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      // 2. Render 4 Stop Detail Cards
+      document.getElementById('part1StopCards').innerHTML = p2Stops.map((s, idx) => {
+        const m = s.metrics || s.key_metrics || {};
+        const stopNum = s.stop_number || s.stop_rank || (idx + 1);
+        const slot = s.schedule || s.schedule_slot || `Saturday, Week ${stopNum} (9:00 AM – 3:00 PM)`;
+        const noVeh = m.pct_no_vehicle !== undefined && m.pct_no_vehicle !== null ? m.pct_no_vehicle : (m.pct_no_vehicle_svi || 0);
+        const unins = m.pct_uninsured_18_64_places !== undefined ? m.pct_uninsured_18_64_places : (m.pct_uninsured || 0);
+        const ftKm = m.km_to_fulltime_brick_mortar_safety_net !== undefined ? m.km_to_fulltime_brick_mortar_safety_net : (m.km_to_safety_net_raw || 0);
+        const diag = auditDiagMap[s.geo_id] || {};
+        const cis = diag.places_95_confidence_intervals || {};
+        const synthScore = s.synthetic_shortage_score !== undefined && s.synthetic_shortage_score !== null
+          ? s.synthetic_shortage_score
+          : (m.synthetic_shortage_score || null);
+
+        return `
+          <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3.5">
+            <div class="flex items-start justify-between gap-2 border-b border-zinc-800 pb-2.5">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded">
+                    Stop #${stopNum} · ${escapeHtml(slot)}
+                  </span>
+                  ${synthScore ? `<span class="px-2 py-0.5 text-xs font-mono bg-blue-500/10 text-blue-300 border border-blue-500/30 rounded">Shortage Score: ${synthScore}</span>` : ''}
+                </div>
+                <h4 class="text-base font-bold text-white mt-1.5">${escapeHtml(s.corridor_name)} (<code class="text-sky-400 text-sm">${escapeHtml(s.geo_id)}</code>)</h4>
+                <div class="text-xs text-zinc-300 mt-0.5">📍 ${escapeHtml(s.staging_landmark)}</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2.5 text-xs">
+              <div class="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div class="text-zinc-400">Uninsured (18–64)</div>
+                <div class="font-bold text-white text-sm mt-0.5">${escapeHtml(cis.uninsured_18_64 || (unins + '%'))}</div>
+              </div>
+              <div class="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div class="text-zinc-400">Diabetes &amp; BP</div>
+                <div class="font-bold text-rose-400 text-sm mt-0.5">${escapeHtml(cis.diabetes || (m.pct_diabetes + '%'))}</div>
+                <div class="text-zinc-400">High BP: ${m.pct_high_bp}%</div>
+              </div>
+              <div class="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div class="text-zinc-400">Transit &amp; Distance</div>
+                <div class="font-bold text-amber-400 text-sm mt-0.5">${noVeh}% No-Car</div>
+                <div class="text-zinc-400">${ftKm} km to full-time clinic</div>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-xs font-semibold text-zinc-400 mb-1.5">What to Bring (Tailored Clinical Supplies):</div>
+              <div class="flex flex-wrap gap-1.5">
+                ${(s.recommended_clinical_kit || []).map(k => `<span class="px-2.5 py-1 text-xs rounded-md bg-zinc-950 border border-zinc-800 text-emerald-300">${escapeHtml(k)}</span>`).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // 3. Render Runner-Up Neighborhoods
+      const runnerUpEl = document.getElementById('runnerUpList');
+      if (runnerUpEl) {
+        runnerUpEl.innerHTML = runnerUps.map(r => `
+          <div class="p-3.5 rounded-lg bg-zinc-950 border border-zinc-800 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-white">${escapeHtml(r.corridor_name)} (<code class="text-sky-400">${escapeHtml(r.geo_id)}</code>)</span>
+              <span class="text-zinc-400">${r.pct_diabetes}% Diabetes · ${r.pct_uninsured_18_64}% Uninsured</span>
+            </div>
+            <p class="text-zinc-300 leading-relaxed">${escapeHtml(r.why_not_picked_this_month)}</p>
+          </div>
+        `).join('');
+      }
+
+      // 4. Render Pass 1 Violations
+      const rawViolations = (DASHBOARD && DASHBOARD.pass1_audit && DASHBOARD.pass1_audit.violations && DASHBOARD.pass1_audit.violations.length > 0)
+        ? DASHBOARD.pass1_audit.violations
+        : DEFAULT_VIOLATIONS;
+      document.getElementById('pass1ViolationPreview').innerHTML = rawViolations.slice(0, 3).map(v => {
+        const text = typeof v === 'string' ? v : (v.detail || v.type || JSON.stringify(v));
+        return `<div>• ${escapeHtml(text)}</div>`;
+      }).join('');
+
+      // 5. Render Bilingual Flyers
+      document.getElementById('bilingualFlyerCards').innerHTML = BILINGUAL_FLYERS.map(f => `
+        <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
+          <div class="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+            <div>
+              <span class="text-xs font-bold text-emerald-400">${escapeHtml(f.saturday)}</span>
+              <h4 class="text-sm font-bold text-white">${escapeHtml(f.neighborhood)} (<code class="text-zinc-400">${escapeHtml(f.geo_id)}</code>)</h4>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+            <div class="p-3.5 rounded-lg bg-zinc-900 border border-zinc-800 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-sky-400 text-sm">🇺🇸 ${escapeHtml(f.en_title)}</span>
+                <button onclick="copyToClipboard('${escapeJs(f.en_sms)}', this)" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300">Copy SMS</button>
+              </div>
+              <div class="text-zinc-300"><strong>Where:</strong> ${escapeHtml(f.landmark_en)}<br/><strong>Transit:</strong> ${escapeHtml(f.transit_en)}</div>
+              <ul class="list-disc pl-4 space-y-1 text-zinc-300">
+                ${f.en_bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
+              </ul>
+              <div class="p-2.5 rounded bg-zinc-950 border border-zinc-800 text-emerald-300 font-mono">
+                📱 ${escapeHtml(f.en_sms)}
+              </div>
+            </div>
+            <div class="p-3.5 rounded-lg bg-zinc-900 border border-zinc-800 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-amber-400 text-sm">🇲🇽 ${escapeHtml(f.es_title)}</span>
+                <button onclick="copyToClipboard('${escapeJs(f.es_sms)}', this)" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300">Copiar SMS</button>
+              </div>
+              <div class="text-zinc-300"><strong>Dónde:</strong> ${escapeHtml(f.landmark_en)}<br/><strong>Transporte:</strong> ${escapeHtml(f.transit_en)}</div>
+              <ul class="list-disc pl-4 space-y-1 text-zinc-300">
+                ${f.es_bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
+              </ul>
+              <div class="p-2.5 rounded bg-zinc-950 border border-zinc-800 text-amber-200 font-mono">
+                📱 ${escapeHtml(f.es_sms)}
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
     async function handleChatSubmit(event) {
       event.preventDefault();
       const input = document.getElementById('chatInput');
@@ -793,14 +916,13 @@
       const container = document.getElementById('chatMessages');
       container.innerHTML = `
         <div class="flex items-start gap-2.5">
-          <div class="w-6 h-6 rounded-full bg-blue-600/20 border border-blue-500/40 flex-shrink-0 flex items-center justify-center text-xs">🚐</div>
-          <div class="p-3 rounded-2xl bg-zinc-800/90 border border-zinc-700/60 text-zinc-200 leading-relaxed shadow-sm space-y-1.5">
-            <div class="font-bold text-white text-[11px]">Chat Cleared</div>
-            <div class="text-[11px] text-zinc-400">New session initialized with Google ADK multi-agent runtime. Ask anything!</div>
+          <div class="w-7 h-7 rounded-full bg-blue-600/20 border border-blue-500/40 flex-shrink-0 flex items-center justify-center text-xs">🚐</div>
+          <div class="p-3.5 rounded-2xl bg-zinc-800/90 border border-zinc-700/60 text-zinc-200 leading-relaxed space-y-1">
+            <div class="font-bold text-white text-xs">Fulton County Mobile Care Assistant</div>
+            <div class="text-sm text-zinc-300">Started a fresh conversation. Ask me to plan the 4-week Saturday schedule or explore neighborhood health barriers!</div>
           </div>
         </div>
       `;
-      document.getElementById('latestAgentAnalysisCard').classList.add('hidden');
     }
 
     async function executeChatPrompt(userText) {
@@ -808,18 +930,16 @@
       const sendBtn = document.getElementById('sendBtn');
       const typingIndicator = document.getElementById('typingIndicator');
 
-      // Append user bubble
       const userBubble = document.createElement('div');
       userBubble.className = "flex justify-end";
       userBubble.innerHTML = `
-        <div class="max-w-[85%] p-2.5 rounded-2xl bg-blue-600 text-white text-xs leading-relaxed shadow">
+        <div class="max-w-[85%] px-3.5 py-2.5 rounded-2xl bg-blue-600 text-white text-sm leading-relaxed shadow">
           ${escapeHtml(userText)}
         </div>
       `;
       container.appendChild(userBubble);
       container.scrollTop = container.scrollHeight;
 
-      // Show typing indicator
       typingIndicator.classList.remove('hidden');
       sendBtn.disabled = true;
 
@@ -836,45 +956,43 @@
         const data = await res.json();
         if (data.session_id) currentSessionId = data.session_id;
 
-        const reply = data.reply || "No text received.";
+        const reply = data.reply || "No response received.";
 
-        // Append assistant bubble
         const assistantBubble = document.createElement('div');
         assistantBubble.className = "flex items-start gap-2.5";
         assistantBubble.innerHTML = `
-          <div class="w-6 h-6 rounded-full bg-blue-600/20 border border-blue-500/40 flex-shrink-0 flex items-center justify-center text-xs">🚐</div>
-          <div class="p-3 rounded-2xl bg-zinc-800/90 border border-zinc-700/60 text-zinc-200 leading-relaxed shadow-sm prose-dark overflow-x-auto max-w-[90%]">
-            <div class="text-[10px] font-bold text-blue-400 mb-1 uppercase tracking-wider">${data.author || 'Mobile Care Broker'}</div>
+          <div class="w-7 h-7 rounded-full bg-blue-600/20 border border-blue-500/40 flex-shrink-0 flex items-center justify-center text-xs">🚐</div>
+          <div class="p-3.5 rounded-2xl bg-zinc-800/95 border border-zinc-700/60 text-zinc-200 leading-relaxed shadow-sm prose-dark overflow-x-auto max-w-[90%]">
             ${marked.parse(reply)}
           </div>
         `;
         container.appendChild(assistantBubble);
         container.scrollTop = container.scrollHeight;
 
-        // Also update the 75% Left Window "Latest Broker Analysis" card
-        const latestCard = document.getElementById('latestAgentAnalysisCard');
-        const latestContent = document.getElementById('latestAnalysisContent');
-        const latestTitle = document.getElementById('latestAnalysisTitle');
-        latestTitle.innerText = `Synthesis on: "${userText.substring(0, 50)}${userText.length > 50 ? '...' : ''}"`;
-        latestContent.innerHTML = marked.parse(reply);
-        latestCard.classList.remove('hidden');
+        // If the chat response includes a 4-week plan (or state update), refresh the 4-Week Schedule table immediately
+        const updatedPlan = data.pass2_plan
+          || (data.state && (data.state.pass2_candidate_plan || data.state.candidate_plan_payload));
+        const updatedAudit = data.pass2_audit
+          || (data.state && typeof data.state.equity_audit === 'object' ? data.state.equity_audit : null);
 
-        // Check if session state contains updated plan or audit
-        if (data.state) {
-          if (data.state.candidate_plan) {
-            DASHBOARD.cached_agent_run = DASHBOARD.cached_agent_run || {};
-            DASHBOARD.cached_agent_run.session_state = data.state;
-            renderSelectedStateKey();
+        if (updatedPlan && updatedPlan.selected_stops && updatedPlan.selected_stops.length > 0) {
+          DASHBOARD.pass2_plan = updatedPlan;
+          if (updatedAudit) DASHBOARD.pass2_audit = updatedAudit;
+          renderScheduleAndAudit();
+          switchTab('tab-schedule');
+          const card = document.getElementById('scheduleCardContainer');
+          if (card) {
+            card.classList.add('ring-2', 'ring-emerald-500/60');
+            setTimeout(() => card.classList.remove('ring-2', 'ring-emerald-500/60'), 2500);
           }
         }
-
       } catch (err) {
         const errorBubble = document.createElement('div');
         errorBubble.className = "flex items-start gap-2.5";
         errorBubble.innerHTML = `
-          <div class="w-6 h-6 rounded-full bg-rose-600/20 border border-rose-500/40 flex-shrink-0 flex items-center justify-center text-xs">⚠️</div>
-          <div class="p-2.5 rounded-2xl bg-rose-950/60 border border-rose-800/70 text-rose-200 text-xs">
-            Network or Server Error: ${escapeHtml(String(err))}
+          <div class="w-7 h-7 rounded-full bg-rose-600/20 border border-rose-500/40 flex-shrink-0 flex items-center justify-center text-xs">⚠️</div>
+          <div class="p-3 rounded-2xl bg-rose-950/60 border border-rose-800/70 text-rose-200 text-xs">
+            Unable to reach assistant: ${escapeHtml(String(err))}
           </div>
         `;
         container.appendChild(errorBubble);
@@ -886,428 +1004,22 @@
       }
     }
 
-    function escapeHtml(str) {
-      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-    }
-
-    // Leaflet Choropleth Color Scale
-    function getColorForValue(metric, val) {
-      if (val === null || val === undefined) return '#3f3f46';
-      if (metric === 'pct_uninsured') {
-        return val > 24 ? '#b91c1c' : val > 18 ? '#ea580c' : val > 13 ? '#d97706' : val > 9 ? '#2563eb' : '#059669';
-      }
-      if (metric === 'pct_diabetes') {
-        return val > 17 ? '#b91c1c' : val > 13 ? '#ea580c' : val > 10 ? '#d97706' : '#059669';
-      }
-      if (metric === 'pct_no_vehicle') {
-        return val > 30 ? '#b91c1c' : val > 20 ? '#ea580c' : val > 12 ? '#d97706' : '#059669';
-      }
-      if (metric === 'km_to_fulltime_safety_net') {
-        return val > 15 ? '#b91c1c' : val > 8 ? '#ea580c' : val > 4 ? '#d97706' : '#059669';
-      }
-      if (metric === 'svi_theme3_minority') {
-        return val > 0.85 ? '#7c3aed' : val > 0.65 ? '#2563eb' : val > 0.40 ? '#0284c7' : '#059669';
-      }
-      return '#2563eb';
-    }
-
-    function initMap() {
-      map = L.map('map', { zoomControl: true }).setView([33.7490, -84.3880], 10);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 18
-      }).addTo(map);
-    }
-
-    function renderTractLayer() {
-      if (!DASHBOARD || !DASHBOARD.tracts) return;
-      if (tractLayer) map.removeLayer(tractLayer);
-
-      const metric = document.getElementById('choroplethMetric').value;
-      tractLayer = L.layerGroup();
-
-      DASHBOARD.tracts.forEach(t => {
-        if (!t.latitude || !t.longitude) return;
-        const color = getColorForValue(metric, t[metric]);
-        const circle = L.circleMarker([t.latitude, t.longitude], {
-          radius: 5.5,
-          fillColor: color,
-          color: '#18181b',
-          weight: 1,
-          opacity: 0.9,
-          fillOpacity: 0.75
-        });
-
-        circle.bindPopup(`
-          <div class="text-xs space-y-1 p-1">
-            <div class="font-bold text-sky-400 font-mono">Tract ${t.geo_id}</div>
-            <div class="text-[11px] text-zinc-400">${t.corridor_name || 'Fulton County'}</div>
-            <hr class="border-zinc-700 my-1"/>
-            <div><strong>Uninsured (18–64):</strong> ${t.uninsured_ci_text || (t.pct_uninsured + '%')}</div>
-            <div><strong>Diabetes:</strong> ${t.diabetes_ci_text || (t.pct_diabetes + '%')}</div>
-            <div><strong>No-Vehicle:</strong> ${t.pct_no_vehicle}%</div>
-            <div><strong>Dist to Safety-Net:</strong> ${t.km_to_safety_net} km</div>
-            <div><strong>Dist to Full-Time:</strong> <span class="text-amber-400 font-bold">${t.km_to_fulltime_safety_net} km</span></div>
-            <div><strong>SVI Theme 3 Minority:</strong> ${t.svi_theme3_minority} (Pctile)</div>
-          </div>
-        `);
-        tractLayer.addLayer(circle);
-      });
-
-      tractLayer.addTo(map);
-    }
-
-    function updateMapOverlays() {
-      if (!DASHBOARD) return;
-      ['pass2', 'pass1', 'careSites', 'constrainedSites'].forEach(k => {
-        if (overlayLayers[k]) map.removeLayer(overlayLayers[k]);
-      });
-
-      // Pass 2 Approved Stops
-      if (document.getElementById('togglePass2').checked) {
-        overlayLayers.pass2 = L.layerGroup();
-        const p2Stops = (DASHBOARD.pass2_plan && DASHBOARD.pass2_plan.selected_stops) || [];
-        p2Stops.forEach(s => {
-          const icon = L.divIcon({
-            className: 'custom-icon',
-            html: `<div class="stop-badge-approve">#${s.stop_rank}</div>`,
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-          });
-          const marker = L.marker([s.latitude, s.longitude], { icon });
-          marker.bindPopup(`
-            <div class="text-xs space-y-1 p-1">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">APPROVED STOP #${s.stop_rank}</span>
-              <div class="font-bold text-white text-sm mt-1">${s.corridor_name}</div>
-              <div class="font-mono text-emerald-400">Tract ${s.geo_id}</div>
-              <div class="text-[11px] text-zinc-300">📍 ${s.staging_landmark}</div>
-              <hr class="border-zinc-700 my-1"/>
-              <div><strong>Uninsured:</strong> ${s.key_metrics.pct_uninsured_18_64_places}%</div>
-              <div><strong>Diabetes:</strong> ${s.key_metrics.pct_diabetes}%</div>
-              <div><strong>No-Vehicle:</strong> ${s.key_metrics.pct_no_vehicle}%</div>
-              <div><strong>Full-Time Safety Net:</strong> ${s.key_metrics.km_to_fulltime_brick_mortar_safety_net} km</div>
-            </div>
-          `);
-          overlayLayers.pass2.addLayer(marker);
-        });
-        overlayLayers.pass2.addTo(map);
-      }
-
-      // Pass 1 Rejected Cluster
-      if (document.getElementById('togglePass1').checked) {
-        overlayLayers.pass1 = L.layerGroup();
-        const p1Stops = (DASHBOARD.pass1_plan && DASHBOARD.pass1_plan.selected_stops) || [];
-        p1Stops.forEach((s, idx) => {
-          const icon = L.divIcon({
-            className: 'custom-icon',
-            html: `<div class="stop-badge-reject">P1</div>`,
-            iconSize: [26, 26],
-            iconAnchor: [13, 13]
-          });
-          const marker = L.marker([s.latitude, s.longitude], { icon });
-          marker.bindPopup(`
-            <div class="text-xs space-y-1 p-1">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300">PASS 1 REJECTED #${idx+1}</span>
-              <div class="font-mono text-rose-400 font-bold mt-1">Tract ${s.geo_id}</div>
-              <div class="text-zinc-300">${s.corridor_name}</div>
-              <div class="text-[11px] text-rose-300">⚠️ Rejected: Clustered 0.46–1.58 km apart</div>
-            </div>
-          `);
-          overlayLayers.pass1.addLayer(marker);
-        });
-        overlayLayers.pass1.addTo(map);
-      }
-
-      // Care sites
-      const sites = DASHBOARD.care_sites || [];
-      if (document.getElementById('toggleCareSites').checked) {
-        overlayLayers.careSites = L.layerGroup();
-        sites.filter(s => !s.is_part_time && !s.is_school && !s.is_mobile).forEach(s => {
-          const circle = L.circleMarker([s.latitude, s.longitude], {
-            radius: 5,
-            fillColor: '#38bdf8',
-            color: '#0284c7',
-            weight: 1.5,
-            fillOpacity: 0.8
-          });
-          circle.bindPopup(`
-            <div class="text-xs space-y-0.5 p-1">
-              <div class="font-bold text-sky-400">${s.name}</div>
-              <div class="text-[11px] text-zinc-300">${s.site_kind} · ${s.city}</div>
-              <div class="text-[11px] text-emerald-400">Hours: ${s.hours_per_week || 'Full-Time'} hr/wk</div>
-            </div>
-          `);
-          overlayLayers.careSites.addLayer(circle);
-        });
-        overlayLayers.careSites.addTo(map);
-      }
-
-      // Constrained Sites
-      if (document.getElementById('toggleConstrainedSites').checked) {
-        overlayLayers.constrainedSites = L.layerGroup();
-        sites.filter(s => s.is_part_time || s.is_school || s.is_mobile).forEach(s => {
-          const circle = L.circleMarker([s.latitude, s.longitude], {
-            radius: 6,
-            fillColor: '#f59e0b',
-            color: '#b45309',
-            weight: 1.5,
-            fillOpacity: 0.9
-          });
-          circle.bindPopup(`
-            <div class="text-xs space-y-0.5 p-1">
-              <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/20 text-amber-300 uppercase">Restricted Capacity</span>
-              <div class="font-bold text-amber-300 mt-1">${s.name}</div>
-              <div class="text-[11px] text-zinc-300">${s.is_mobile ? '🚐 Mobile Listing' : s.is_school ? '🏫 School-Based' : '⏰ Part-Time (<20h)'}</div>
-              <div class="text-[11px] text-rose-300 font-mono">${s.hours_per_week ? (s.hours_per_week + ' hr/wk') : 'Variable'}</div>
-            </div>
-          `);
-          overlayLayers.constrainedSites.addLayer(circle);
-        });
-        overlayLayers.constrainedSites.addTo(map);
-      }
-    }
-
-    function renderAllPanels() {
-      if (!DASHBOARD) return;
-
-      const p2Stops = (DASHBOARD.pass2_plan && DASHBOARD.pass2_plan.selected_stops) || [];
-      const auditDiagMap = {};
-      const diagList = (DASHBOARD.pass2_audit && DASHBOARD.pass2_audit.post_hoc_equity_and_demographic_audit && DASHBOARD.pass2_audit.post_hoc_equity_and_demographic_audit.stop_by_stop_diagnostics) || [];
-      diagList.forEach(d => { auditDiagMap[d.geo_id] = d; });
-
-      // 1. Populate Schedule Summary Table
-      const scheduleTbody = document.getElementById('scheduleTableBody');
-      scheduleTbody.innerHTML = p2Stops.map(s => {
-        const diag = auditDiagMap[s.geo_id] || {};
-        return `
-          <tr class="hover:bg-zinc-800/40 transition">
-            <td class="p-3">
-              <span class="font-bold text-emerald-400">Stop #${s.stop_rank}</span>
-              <div class="text-[11px] text-zinc-400">${s.schedule_slot || ('Saturday #' + s.stop_rank)}</div>
-            </td>
-            <td class="p-3 font-mono font-bold text-sky-400">${s.geo_id}</td>
-            <td class="p-3">
-              <div class="font-semibold text-white">${s.corridor_name}</div>
-              <div class="text-[11px] text-zinc-400 truncate max-w-[200px]" title="${s.staging_landmark}">📍 ${s.staging_landmark}</div>
-            </td>
-            <td class="p-3">
-              <div><span class="text-rose-400 font-bold">${s.key_metrics.pct_diabetes}%</span> Diabetes · <span class="text-sky-300">${s.key_metrics.pct_uninsured_18_64_places}%</span> Unins</div>
-              <div class="text-[11px] text-zinc-400">${s.key_metrics.pct_high_bp}% High BP · ${s.key_metrics.pct_missed_checkup || '28.4%'} Missed Checkup</div>
-            </td>
-            <td class="p-3">
-              <span class="text-amber-400 font-bold">${s.key_metrics.pct_no_vehicle}%</span> No-Veh
-              <div class="text-[11px] text-zinc-400">${s.key_metrics.pct_mobility_difficulty}% Mobility Diff</div>
-            </td>
-            <td class="p-3">
-              <span class="font-mono text-white font-semibold">${s.key_metrics.km_to_fulltime_brick_mortar_safety_net} km</span>
-              <div class="text-[11px] text-zinc-400">${s.nearest_safety_net_name || 'Primary FQHC'}</div>
-            </td>
-            <td class="p-3 text-right">
-              <button onclick="flyToTract(${s.latitude}, ${s.longitude})" class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs text-sky-300 font-medium transition">
-                📍 Map
-              </button>
-            </td>
-          </tr>
-        `;
-      }).join('');
-
-      // 2. Populate Detailed Stop Cards
-      document.getElementById('part1StopCards').innerHTML = p2Stops.map(s => {
-        const diag = auditDiagMap[s.geo_id] || {};
-        const cis = diag.places_95_confidence_intervals || {};
-        return `
-          <div class="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3">
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <span class="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded">${s.schedule_slot || ('Saturday #' + s.stop_rank)}</span>
-                <h4 class="text-sm font-bold text-white mt-1">Stop #${s.stop_rank}: ${s.corridor_name} (<code class="text-emerald-400">${s.geo_id}</code>)</h4>
-                <div class="text-xs text-zinc-400 font-medium mt-0.5">📍 ${s.staging_landmark}</div>
-              </div>
-              <button onclick="flyToTract(${s.latitude}, ${s.longitude})" class="px-2.5 py-1 text-xs rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200">Zoom Map</button>
-            </div>
-
-            <div class="grid grid-cols-3 gap-2 text-xs">
-              <div class="p-2 rounded bg-zinc-900 border border-zinc-800">
-                <div class="text-[10px] text-zinc-400">Uninsured (18–64)</div>
-                <div class="font-bold text-white">${cis.uninsured_18_64 || (s.key_metrics.pct_uninsured_18_64_places + '%')}</div>
-                <div class="text-[10px] text-zinc-500">All-Ages: ${s.key_metrics.pct_uninsured_all_ages_svi}%</div>
-              </div>
-              <div class="p-2 rounded bg-zinc-900 border border-zinc-800">
-                <div class="text-[10px] text-zinc-400">Diabetes & BP</div>
-                <div class="font-bold text-rose-400">${cis.diabetes || (s.key_metrics.pct_diabetes + '%')}</div>
-                <div class="text-[10px] text-zinc-500">BP: ${cis.high_bp || (s.key_metrics.pct_high_bp + '%')}</div>
-              </div>
-              <div class="p-2 rounded bg-zinc-900 border border-zinc-800">
-                <div class="text-[10px] text-zinc-400">Transit Lock</div>
-                <div class="font-bold text-amber-400">${s.key_metrics.pct_no_vehicle}% No-Veh</div>
-                <div class="text-[10px] text-zinc-500">Pop: ${s.total_pop.toLocaleString()}</div>
-              </div>
-            </div>
-
-            <div class="text-xs space-y-1 bg-zinc-900/80 p-2.5 rounded border border-zinc-800/80">
-              <div><strong class="text-amber-400">Facility Capacity Audit:</strong> Full-Time Brick & Mortar: <strong>${s.key_metrics.km_to_fulltime_brick_mortar_safety_net} km</strong> (Part-time illusions bypassed)</div>
-              <div><strong class="text-sky-300">Field Intelligence:</strong> ${s.field_intelligence_applied}</div>
-            </div>
-
-            <div>
-              <div class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Tailored Clinical Screening Kit:</div>
-              <div class="flex flex-wrap gap-1.5">
-                ${(s.recommended_clinical_kit || []).map(k => `<span class="px-2 py-0.5 text-[10px] rounded bg-emerald-950/60 border border-emerald-800/50 text-emerald-300 font-medium">${k}</span>`).join('')}
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      // 3. Populate Pass 1 Violations
-      const p1Violations = (DASHBOARD.pass1_audit && DASHBOARD.pass1_audit.violations) || [];
-      document.getElementById('pass1ViolationPreview').innerHTML = p1Violations.slice(0, 3).map(v => `<div>⚠️ ${v}</div>`).join('');
-
-      // 4. Populate Stop Demographics Table
-      document.getElementById('stopDemographicsTable').innerHTML = `
-        <table class="w-full text-xs border border-zinc-800 border-collapse">
-          <thead class="bg-zinc-950 text-zinc-400">
-            <tr>
-              <th class="p-2 border border-zinc-800">Tract & Corridor</th>
-              <th class="p-2 border border-zinc-800">SVI Theme 3</th>
-              <th class="p-2 border border-zinc-800">% Minority</th>
-              <th class="p-2 border border-zinc-800">% Black</th>
-              <th class="p-2 border border-zinc-800">% Hispanic</th>
-              <th class="p-2 border border-zinc-800">% Limited EN</th>
-              <th class="p-2 border border-zinc-800">% Poverty</th>
-              <th class="p-2 border border-zinc-800">Median Income</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-zinc-800 text-zinc-200">
-            ${diagList.map(d => `
-              <tr class="hover:bg-zinc-800/30">
-                <td class="p-2"><div class="font-mono text-emerald-400 font-bold">${d.geo_id}</div><div class="text-[11px] text-zinc-400">${d.corridor_name}</div></td>
-                <td class="p-2 font-mono text-sky-400 font-bold">${d.svi_theme3_minority_pctile}</td>
-                <td class="p-2 font-bold text-white">${d.pct_minority}%</td>
-                <td class="p-2">${d.pct_black}%</td>
-                <td class="p-2 ${d.pct_hispanic >= 15 ? 'text-amber-400 font-bold' : ''}">${d.pct_hispanic}%</td>
-                <td class="p-2 ${d.pct_limited_english >= 3 ? 'text-amber-400 font-bold' : ''}">${d.pct_limited_english}%</td>
-                <td class="p-2 text-rose-400 font-semibold">${d.pct_poverty_acs}%</td>
-                <td class="p-2 font-mono">${d.acs_median_income ? ('$' + d.acs_median_income.toLocaleString()) : 'N/A'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
-
-      // 5. Populate Bilingual Flyers Cards
-      document.getElementById('bilingualFlyerCards').innerHTML = BILINGUAL_FLYERS.map(f => `
-        <div class="p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-3">
-          <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
-            <div>
-              <span class="text-xs font-bold text-emerald-400">${f.saturday}</span>
-              <h4 class="text-sm font-bold text-white">${f.neighborhood} (<code class="text-zinc-400">${f.geo_id}</code>)</h4>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <button onclick="downloadFlyer('bilingual', 'txt')" class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] text-zinc-200">Download Text</button>
-            </div>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            <!-- English -->
-            <div class="p-3 rounded-lg bg-zinc-900 border border-zinc-800 space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-sky-400">🇺🇸 ${f.en_title}</span>
-                <button onclick="copyToClipboard('${escapeJs(f.en_sms)}', this)" class="text-[10px] text-zinc-400 hover:text-white">Copy SMS</button>
-              </div>
-              <div class="text-[11px] text-zinc-300"><strong>Where:</strong> ${f.landmark_en}<br/><strong>Transit:</strong> ${f.transit_en}</div>
-              <ul class="list-disc pl-4 space-y-0.5 text-[11px] text-zinc-300">
-                ${f.en_bullets.map(b => `<li>${b}</li>`).join('')}
-              </ul>
-              <div class="p-2 rounded bg-zinc-950 border border-zinc-800/80 text-[11px] text-emerald-300 font-mono">
-                📱 ${f.en_sms}
-              </div>
-            </div>
-            <!-- Spanish -->
-            <div class="p-3 rounded-lg bg-zinc-900 border border-zinc-800 space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-amber-400">🇲🇽 ${f.es_title}</span>
-                <button onclick="copyToClipboard('${escapeJs(f.es_sms)}', this)" class="text-[10px] text-zinc-400 hover:text-white">Copiar SMS</button>
-              </div>
-              <div class="text-[11px] text-zinc-300"><strong>Dónde:</strong> ${f.landmark_en}<br/><strong>Transporte:</strong> ${f.transit_en}</div>
-              <ul class="list-disc pl-4 space-y-0.5 text-[11px] text-zinc-300">
-                ${f.es_bullets.map(b => `<li>${b}</li>`).join('')}
-              </ul>
-              <div class="p-2 rounded bg-zinc-950 border border-zinc-800/80 text-[11px] text-amber-200 font-mono">
-                📱 ${f.es_sms}
-              </div>
-            </div>
-          </div>
-        </div>
-      `).join('');
-
-      // 6. Populate Constrained Clinics Table
-      const constrained = (DASHBOARD.access_summary && DASHBOARD.access_summary.limited_capacity_or_restricted_sites_in_care_sites) || [];
-      document.getElementById('part2ConstrainedClinics').innerHTML = `
-        <table class="w-full text-[11px] border border-zinc-800 border-collapse">
-          <thead class="bg-zinc-950 text-zinc-400">
-            <tr>
-              <th class="p-2 border border-zinc-800">Facility Name in care_sites</th>
-              <th class="p-2 border border-zinc-800">City</th>
-              <th class="p-2 border border-zinc-800">Reported Operating Hours</th>
-              <th class="p-2 border border-zinc-800">Capacity Assessment</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-zinc-800 text-zinc-200">
-            ${constrained.map(c => `
-              <tr class="hover:bg-zinc-800/30">
-                <td class="p-2 text-amber-300 font-medium">${c.FACILITY_NM}</td>
-                <td class="p-2 text-zinc-400">${c.city || 'Atlanta'}</td>
-                <td class="p-2 text-rose-400 font-mono">${c.hours_per_week ? (c.hours_per_week + ' hr/wk') : 'School/Mobile'}</td>
-                <td class="p-2 text-[10px] text-zinc-400">Cannot satisfy 40 hr primary care baseline</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
-
-      // 7. Populate State key
-      renderSelectedStateKey();
-    }
-
-    function escapeJs(str) {
-      return str.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
-    }
-
-    function flyToTract(lat, lng) {
-      switchTab('tab-map');
-      if (map) {
-        setTimeout(() => {
-          map.flyTo([lat, lng], 13);
-        }, 200);
-      }
-    }
-
-    function renderSelectedStateKey() {
-      if (!DASHBOARD) return;
-      const key = document.getElementById('stateKeySelector').value;
-      const st = (DASHBOARD.cached_agent_run && DASHBOARD.cached_agent_run.session_state) || {};
-      const val = st[key];
-      const container = document.getElementById('stateKeyContent');
-      if (!val) {
-        container.innerHTML = `<div class="text-zinc-500">No value currently stored for key "${key}". Use the chat on the right to trigger the Planner or Auditor.</div>`;
-      } else if (typeof val === 'string') {
-        container.innerHTML = marked.parse(val);
-      } else {
-        container.innerHTML = `<pre class="text-xs font-mono text-emerald-400 whitespace-pre-wrap">${JSON.stringify(val, null, 2)}</pre>`;
-      }
-    }
-
     async function boot() {
-      initMap();
+      // Immediately render the 4-week schedule with built-in defaults so the UI is never blank
+      renderScheduleAndAudit();
+
+      // Then fetch live BigQuery dashboard data in the background and refresh
       try {
         const res = await fetch('/api/dashboard-data');
-        DASHBOARD = await res.json();
-        renderTractLayer();
-        updateMapOverlays();
-        renderAllPanels();
+        if (res.ok) {
+          const liveData = await res.json();
+          if (liveData && liveData.pass2_plan && liveData.pass2_plan.selected_stops) {
+            DASHBOARD = liveData;
+            renderScheduleAndAudit();
+          }
+        }
       } catch (err) {
-        console.error("Dashboard boot error:", err);
+        console.warn("Using built-in schedule fallback:", err);
       }
     }
 

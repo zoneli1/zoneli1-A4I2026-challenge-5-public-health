@@ -137,71 +137,7 @@ def build_dashboard_payload(force_refresh: bool = False) -> dict[str, Any]:
                 pass
         return _DASHBOARD_CACHE
 
-    T = f"`{PROJECT_ID}.{DATASET_ID}`"
-
-    # 1. Fetch all 326 Fulton County tracts with coordinates, burden, access, and post-hoc diagnostics
-    tracts_sql = f"""
-    SELECT
-      b.geo_id,
-      b.total_pop,
-      ROUND(b.pct_uninsured, 1) AS pct_uninsured,
-      ROUND(b.pct_uninsured_all_ages, 1) AS pct_uninsured_all_ages,
-      ROUND(b.uninsured_gap, 1) AS uninsured_gap,
-      ROUND(b.pct_diabetes, 1) AS pct_diabetes,
-      ROUND(b.pct_high_bp, 1) AS pct_high_bp,
-      ROUND(b.pct_asthma, 1) AS pct_asthma,
-      ROUND(b.pct_copd, 1) AS pct_copd,
-      ROUND(100.0 - b.pct_checkup, 1) AS pct_missed_checkup,
-      ROUND(b.pct_no_vehicle, 1) AS pct_no_vehicle,
-      ROUND(b.pct_mobility_difficulty, 1) AS pct_mobility_difficulty,
-      ROUND(b.pct_limited_english, 1) AS pct_limited_english,
-      ROUND(a.km_to_any_care, 2) AS km_to_any_care,
-      ROUND(a.km_to_safety_net, 2) AS km_to_safety_net,
-      ROUND(a.extra_km_if_uninsured, 2) AS extra_km_if_uninsured,
-      d.latitude,
-      d.longitude,
-      d.corridor_name,
-      ROUND(d.km_to_fulltime_safety_net, 2) AS km_to_fulltime_safety_net,
-      ROUND(d.km_to_statewide_safety_net, 2) AS km_to_statewide_safety_net,
-      ROUND(d.cross_border_savings_km, 2) AS cross_border_savings_km,
-      d.nearest_safety_net_name,
-      d.nearest_safety_net_hours_wk,
-      d.nearest_sn_is_mobile_unit,
-      d.nearest_sn_is_school_based,
-      d.nearest_sn_is_part_time,
-      ROUND(d.svi_theme3_minority, 3) AS svi_theme3_minority,
-      ROUND(d.pct_minority, 1) AS pct_minority,
-      ROUND(d.pct_black, 1) AS pct_black,
-      ROUND(d.pct_hispanic, 1) AS pct_hispanic,
-      ROUND(d.pct_poverty_acs, 1) AS pct_poverty_acs,
-      d.acs_median_income,
-      d.uninsured_ci_text,
-      d.diabetes_ci_text
-    FROM {T}.burden_tracts b
-    JOIN {T}.tract_access a USING (geo_id)
-    JOIN {T}.audit_tract_diagnostics d USING (geo_id)
-    ORDER BY b.geo_id
-    """
-    tracts = run_bq_query(tracts_sql).to_dict(orient="records")
-
-    # 2. Fetch care_sites in Fulton County
-    sites_sql = f"""
-    SELECT
-      FACILITY_NM AS name,
-      site_kind,
-      CMS_PROVIDER_CITY AS city,
-      TOT_OPER_HR_PER_WEEK AS hours_per_week,
-      latitude,
-      longitude,
-      REGEXP_CONTAINS(UPPER(FACILITY_NM), r'MOBILE|SPRINTER|VAN') AS is_mobile,
-      REGEXP_CONTAINS(UPPER(FACILITY_NM), r'SCHOOL|ELEMENTARY|ACADEMY|HIGH|KIPP|NOLAN|BANNEKER|DOBBS|HOLLIS|MILES') AS is_school,
-      (TOT_OPER_HR_PER_WEEK IS NOT NULL AND TOT_OPER_HR_PER_WEEK < 20) AS is_part_time
-    FROM {T}.care_sites
-    WHERE latitude IS NOT NULL AND longitude IS NOT NULL
-    """
-    care_sites = run_bq_query(sites_sql).to_dict(orient="records")
-
-    # 3. Execute Pass 1 -> Audit Reject -> Pass 2 -> Audit Approve state machine
+    # Execute Pass 1 -> Audit Reject -> Pass 2 -> Audit Approve state machine
     ctx = DummyContext()
     burden_summary = analyze_burden_and_barriers("13121", ctx)
     access_summary = analyze_spatial_access_and_shortages("13121", ctx)
@@ -223,8 +159,6 @@ def build_dashboard_payload(force_refresh: bool = False) -> dict[str, Any]:
         {
             "county_fips": "13121",
             "county_name": "Fulton County, Georgia",
-            "tracts": tracts,
-            "care_sites": care_sites,
             "burden_summary": burden_summary,
             "access_summary": access_summary,
             "regional_context": regional_context,
@@ -328,7 +262,28 @@ async def handle_chat(req: ChatRequest) -> JSONResponse:
 
         reply = "\n\n".join(text_chunks) if text_chunks else "I processed your request, but no text response was produced."
         updated_sess = await session_service.get_session(app_name="broker_app", user_id=req.user_id, session_id=session_id)
-        current_state = getattr(updated_sess, "state", {})
+        current_state = getattr(updated_sess, "state", {}) or {}
+
+        # Extract structured 4-week plan & equity audit if generated during this session
+        active_plan = (
+            current_state.get("pass2_candidate_plan")
+            or current_state.get("candidate_plan_payload")
+        )
+        active_audit = current_state.get("equity_audit")
+        if isinstance(active_audit, str):
+            active_audit = None
+
+        # If the user asked to plan/schedule the 4 Saturdays and the agent responded,
+        # ensure we attach the structured 4-week schedule & audit so the UI table always updates
+        msg_lower = req.message.lower()
+        is_schedule_query = any(
+            kw in msg_lower
+            for kw in ("plan", "schedule", "saturday", "4-week", "four week", "four location", "stops", "deploy")
+        )
+        if is_schedule_query and (not isinstance(active_plan, dict) or not active_plan.get("selected_stops")):
+            dash = build_dashboard_payload(force_refresh=False)
+            active_plan = dash.get("pass2_plan")
+            active_audit = active_audit or dash.get("pass2_audit")
 
         return JSONResponse(
             content={
@@ -336,6 +291,8 @@ async def handle_chat(req: ChatRequest) -> JSONResponse:
                 "session_id": session_id,
                 "author": author,
                 "state": _json_safe(current_state),
+                "pass2_plan": _json_safe(active_plan) if active_plan else None,
+                "pass2_audit": _json_safe(active_audit) if active_audit else None,
             }
         )
     except Exception as exc:
