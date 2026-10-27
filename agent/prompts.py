@@ -4,12 +4,18 @@ Interactive architecture:
 - root_agent (`mobile_care_equity_broker`): Welcoming, interactive conversational coordinator.
   Greets users warmly and answers domain/data questions directly. Only invokes the
   planning-auditing-communicating pipeline when the user asks to plan/deploy mobile clinics.
-- planner_agent: Queries BigQuery (Burden, Access, Shortages) -> Writes to session.state["candidate_plan"]
-  -> Transfers to auditor_agent.
-- auditor_agent: Evaluates equity criteria (uninsured share, vehicle access, CDC SVI)
-  -> Writes to session.state["equity_audit"] -> Transfers to communicator_agent.
-- communicator_agent: Generates clear, plain-language outreach copy & 4-week calendar
-  from session.state.
+- planner_agent: Queries BigQuery (Burden, Access, Shortages, Synthetic Shortage Tracts,
+  Surveillance, and Field Reports) -> Executes Pass 1 (`pass1_naive_access`) first and writes to
+  session.state["candidate_plan_payload"] -> Transfers to auditor_agent. When auditor_agent
+  rejects Pass 1 and transfers back, planner_agent runs Pass 2 (`pass2_audited_composite`)
+  and transfers to auditor_agent again.
+- auditor_agent: Evaluates equity, statistical, and methodological criteria (including
+  `synthetic_shortage_tracts`, cross-border clinics, 95% PLACES CIs, school/specialized site
+  distortions, transit lock, and post-hoc CDC SVI Theme 3) -> Writes to
+  session.state["equity_audit"] -> Transfers back to planner_agent if REJECT, or to
+  communicator_agent if APPROVE.
+- communicator_agent: Generates the complete 4-part Clinic Plan (`Where and when`, `What to bring`,
+  `Why here and not there`, `What this plan cannot see`) and bilingual community outreach copy.
 """
 
 BROKER_COORDINATOR_PROMPT = """You are the **Lead Mobile Care Equity Broker & Coordinator** for Fulton County, GA (`13121`).
