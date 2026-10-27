@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A4I Challenge 5 — Fulton County Dynamic Mobile Care & Health Equity Broker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body { background: #0b1120; color: #e2e8f0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    #map { height: 540px; width: 100%; border-radius: 0.75rem; border: 1px solid #334155; }
+    .leaflet-popup-content-wrapper { background: #0f172a; color: #f1f5f9; border: 1px solid #334155; border-radius: 0.5rem; }
+    .leaflet-popup-tip { background: #0f172a; }
+    .stop-badge-approve {
+      background: #10b981; color: #022c22; font-weight: 800; border: 2px solid #ecfdf5;
+      border-radius: 9999px; width: 30px; height: 30px; display: flex; align-items: center;
+      justify-content: center; box-shadow: 0 0 14px rgba(16,185,129,0.85); font-size: 14px;
+    }
+    .stop-badge-reject {
+      background: #ef4444; color: #ffffff; font-weight: 800; border: 2px solid #fef2f2;
+      border-radius: 9999px; width: 28px; height: 28px; display: flex; align-items: center;
+      justify-content: center; box-shadow: 0 0 14px rgba(239,68,68,0.85); font-size: 12px;
+    }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3 { color: #f8fafc; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; }
+    .markdown-body h2 { font-size: 1.25rem; border-bottom: 1px solid #334155; padding-bottom: 0.25rem; }
+    .markdown-body h3 { font-size: 1.05rem; color: #38bdf8; }
+    .markdown-body p, .markdown-body li { color: #cbd5e1; line-height: 1.6; font-size: 0.92rem; }
+    .markdown-body ul { list-style-type: disc; padding-left: 1.4rem; margin-bottom: 0.75rem; }
+    .markdown-body strong { color: #f1f5f9; }
+    .markdown-body table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.85rem; }
+    .markdown-body th, .markdown-body td { border: 1px solid #334155; padding: 0.45rem 0.6rem; text-align: left; }
+    .markdown-body th { background: #1e293b; color: #94a3b8; }
+  </style>
+</head>
+<body class="min-h-screen pb-16">
+  <!-- Top Header -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full">Agents for Impact 2026 · Challenge 5</span>
+          <span class="px-2.5 py-0.5 text-xs font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/40 rounded-full">Google ADK + BigQuery MCP + gemini-3.6-flash</span>
+        </div>
+        <h1 class="text-xl md:text-2xl font-bold text-white mt-1">
+          Fulton County (<code class="text-sky-400">13121</code>) Preventative Mobile Care & Health Equity Broker
+        </h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="runLiveAgentPipeline()" id="runAgentBtn" class="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow flex items-center gap-2 transition">
+          <span>⚡ Re-Run Live ADK Multi-Agent Pipeline</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 mt-5 space-y-6">
+    <!-- Top Executive Summary Metrics -->
+    <section class="grid grid-cols-2 md:grid-cols-6 gap-3" id="kpiBar">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5">
+        <div class="text-xs text-slate-400">County Coverage</div>
+        <div class="text-lg font-bold text-white mt-0.5">326 Tracts</div>
+        <div class="text-[11px] text-slate-400">1,061,937 Pop (+1 suppressed)</div>
+      </div>
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5">
+        <div class="text-xs text-slate-400">Safety-Net Desert (&gt;5 km)</div>
+        <div class="text-lg font-bold text-amber-400 mt-0.5" id="kpiPopOver5km">443,800</div>
+        <div class="text-[11px] text-slate-400">41.4% tracts pay uninsured penalty</div>
+      </div>
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5">
+        <div class="text-xs text-slate-400">Federal HPSA Polygons</div>
+        <div class="text-lg font-bold text-rose-400 mt-0.5">0 Active Rows</div>
+        <div class="text-[11px] text-slate-400">All 99 "Proposed For Withdrawal"</div>
+      </div>
+      <div class="bg-slate-900/90 border border-rose-900/60 rounded-xl p-3.5">
+        <div class="text-xs text-rose-300">Pass 1 First Answer</div>
+        <div class="text-lg font-bold text-rose-400 mt-0.5">REJECTED</div>
+        <div class="text-[11px] text-rose-300/80">4 stops clustered 0.46–1.58 km apart</div>
+      </div>
+      <div class="bg-slate-900/90 border border-emerald-900/60 rounded-xl p-3.5">
+        <div class="text-xs text-emerald-300">Pass 2 Revised Plan</div>
+        <div class="text-lg font-bold text-emerald-400 mt-0.5">APPROVED</div>
+        <div class="text-[11px] text-emerald-300/80">4 Corridors · 42.6% No-Vehicle</div>
+      </div>
+      <div class="bg-slate-900/90 border border-sky-900/60 rounded-xl p-3.5">
+        <div class="text-xs text-sky-300">Post-Hoc Equity Landing</div>
+        <div class="text-lg font-bold text-sky-400 mt-0.5" id="kpiMinorityPct">88.8% Minority</div>
+        <div class="text-[11px] text-sky-300/80">vs 61.0% county · SVI Theme 3: 0.909</div>
+      </div>
+    </section>
+
+    <!-- Interactive Map + Quick Stop Selector -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div class="lg:col-span-8 bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-bold text-white">Geospatial Siting & Facility Capacity Broker Map</h2>
+            <p class="text-xs text-slate-400">Compare <span class="text-emerald-400 font-semibold">Pass 2 Approved Stops (Emerald #1–#4)</span> vs <span class="text-rose-400 font-semibold">Pass 1 Rejected Cluster (Red P1)</span> & inspect part-time/school/mobile clinic illusions.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <label class="text-slate-400">Tract Color:</label>
+            <select id="choroplethMetric" onchange="renderTractLayer()" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200">
+              <option value="pct_uninsured">Uninsured 18–64 (PLACES MRP %)</option>
+              <option value="pct_diabetes">Diabetes Prevalence (PLACES MRP %)</option>
+              <option value="pct_no_vehicle">No-Vehicle Households (SVI ACS %)</option>
+              <option value="km_to_fulltime_safety_net">Distance to Full-Time Safety-Net (km)</option>
+              <option value="svi_theme3_minority">Post-Hoc Audit: SVI Theme 3 Minority Percentile</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="map"></div>
+
+        <!-- Map Layer Toggles & Legend -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-slate-300">
+          <div class="flex flex-wrap items-center gap-4">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="togglePass2" checked onchange="updateMapOverlays()" class="accent-emerald-500" />
+              <span class="inline-block w-3 h-3 rounded-full bg-emerald-500"></span> Pass 2 Approved Stops (4)
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="togglePass1" checked onchange="updateMapOverlays()" class="accent-rose-500" />
+              <span class="inline-block w-3 h-3 rounded-full bg-rose-500"></span> Pass 1 Rejected Cluster (4)
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="toggleCareSites" checked onchange="updateMapOverlays()" class="accent-sky-400" />
+              <span class="inline-block w-2.5 h-2.5 rounded-full bg-sky-400"></span> Full-Time Clinics & Hospitals
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="toggleConstrainedSites" checked onchange="updateMapOverlays()" class="accent-amber-400" />
+              <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400"></span> Part-Time (&lt;20h) / School / Mobile Listed Sites
+            </label>
+          </div>
+          <div class="text-[11px] text-slate-400">Click any tract or stop marker for 95% CIs & facility capacity audit</div>
+        </div>
+      </div>
+
+      <!-- Right Sidebar: Pass 1 Rejection vs Pass 2 Approval Summary -->
+      <div class="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-4">
+        <div class="space-y-3">
+          <div class="p-3 rounded-lg bg-rose-950/40 border border-rose-800/70">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-rose-300">Pass 1 · First Answer Rejected</span>
+              <span class="px-2 py-0.5 text-[10px] font-bold bg-rose-500/20 text-rose-300 rounded">Loop Iteration 1</span>
+            </div>
+            <p class="text-xs text-rose-200/90 mt-1.5">
+              Naive ranking by raw <code class="text-rose-300">km_to_safety_net</code> + <code class="text-rose-300">pct_uninsured</code> placed all 4 Saturday vans in <strong>North Fulton (Roswell / Alpharetta)</strong>:
+              <code class="text-rose-300">13121011431</code>, <code class="text-rose-300">13121011421</code>, <code class="text-rose-300">13121011430</code>, <code class="text-rose-300">13121011432</code>.
+            </p>
+            <ul class="mt-2 space-y-1 text-[11px] text-rose-200/80 list-disc pl-4" id="pass1ViolationPreview"></ul>
+          </div>
+
+          <div class="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/60">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-emerald-300">Pass 2 · Audited 4-Stop Schedule</span>
+              <span class="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 rounded">Loop Iteration 2 · Escalate=True</span>
+            </div>
+            <div class="mt-2.5 space-y-2" id="sidebarStopList"></div>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-lg bg-slate-800/70 border border-slate-700 text-xs space-y-1">
+          <div class="font-semibold text-sky-300">Resolution & Governance Guardrails Enforced</div>
+          <div class="text-slate-300 text-[11px]">
+            • <strong>Zero Racial Proxy Input:</strong> SVI Theme 3 (<code class="text-sky-300">RPL_THEME3</code>) withheld from Planner; audited post-hoc.<br/>
+            • <strong>No 12 km Grid Misuse:</strong> <code class="text-sky-300">exposure_tracts.mean_pm</code> (<code class="text-amber-300">p90/p10 = 1.051x</code>, 2021 only) banned from tract ranking.<br/>
+            • <strong>No 4-County HSA Misuse:</strong> <code class="text-sky-300">disease_weekly</code> configures respiratory test/vaccine kits only.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs for the 4-Part Clinic Plan + Judge Architecture Inspector -->
+    <section class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="flex flex-wrap border-b border-slate-800 bg-slate-950/60 px-2 pt-2 gap-1">
+        <button onclick="switchTab('tab-part1')" id="btn-tab-part1" class="tab-btn px-4 py-2.5 text-xs font-bold rounded-t-lg bg-slate-800 text-emerald-400 border-t border-x border-slate-700">
+          Part 1: 4 Ranked Saturday Stops & Pass 1→2 Self-Correction
+        </button>
+        <button onclick="switchTab('tab-part2')" id="btn-tab-part2" class="tab-btn px-4 py-2.5 text-xs font-semibold rounded-t-lg text-slate-400 hover:text-white">
+          Part 2: "What We Could Not Tell You" (Scale & Data Traps)
+        </button>
+        <button onclick="switchTab('tab-part3')" id="btn-tab-part3" class="tab-btn px-4 py-2.5 text-xs font-semibold rounded-t-lg text-slate-400 hover:text-white">
+          Part 3: "Who This Plan Lands On" (Post-Hoc SVI Theme 3 Audit)
+        </button>
+        <button onclick="switchTab('tab-part4')" id="btn-tab-part4" class="tab-btn px-4 py-2.5 text-xs font-semibold rounded-t-lg text-slate-400 hover:text-white">
+          Part 4: Bilingual Community Outreach (EN + ES, 6th-Grade)
+        </button>
+        <button onclick="switchTab('tab-judge')" id="btn-tab-judge" class="tab-btn px-4 py-2.5 text-xs font-semibold rounded-t-lg text-sky-400 hover:text-sky-300">
+          ⚙️ ADK Multi-Agent Trace, session.state & NP Field Loop
+        </button>
+      </div>
+
+      <!-- TAB 1: PART 1 — 4 RANKED STOPS & SELF-CORRECTION -->
+      <div id="tab-part1" class="tab-panel p-5 space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="p-4 rounded-xl bg-rose-950/25 border border-rose-800/60 space-y-2">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-rose-300">Why the Broker Rejected Its Own First Answer (Pass 1)</h3>
+              <span class="text-xs px-2 py-0.5 bg-rose-500/20 text-rose-300 rounded font-semibold">Auditor Verdict: REJECT</span>
+            </div>
+            <p class="text-xs text-slate-300">
+              In Pass 1 (<code class="text-rose-300">pass1_naive_access</code>), <code class="text-rose-300">siting_planner</code> ranked tracts by raw straight-line distance to any listed safety-net site (<code class="text-rose-300">km_to_safety_net</code>) and working-age uninsured rate. The <code class="text-rose-300">equity_and_rigor_auditor</code> rejected Pass 1 on three independent grounds:
+            </p>
+            <div id="pass1DetailedViolations" class="space-y-1.5 text-xs text-rose-200/90"></div>
+            <div class="pt-2">
+              <div class="text-[11px] font-semibold text-rose-300 uppercase">Statistical Indistinguishability (Overlapping 95% CIs in Pass 1):</div>
+              <div id="pass1CiOverlaps" class="mt-1 space-y-1 text-[11px] text-slate-300"></div>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-emerald-950/25 border border-emerald-800/60 space-y-2">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-emerald-300">How Pass 2 Revised the Siting Plan</h3>
+              <span class="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded font-semibold">Auditor Verdict: APPROVE</span>
+            </div>
+            <p class="text-xs text-slate-300">
+              Reading <code class="text-emerald-300">session.state['audit_verdict'] == 'REJECT'</code> and <code class="text-emerald-300">session.state['audit_feedback']</code>, Pass 2 (<code class="text-emerald-300">pass2_audited_composite</code>) enforced:
+            </p>
+            <ul class="text-xs text-slate-300 space-y-1.5 list-disc pl-4">
+              <li><strong>Minimum 4.0 km Inter-Stop Spacing & Corridor Cap:</strong> Maximum 1 Saturday stop per sub-county corridor across 4 distinct regions of Fulton County.</li>
+              <li><strong>Facility Capacity Penalty:</strong> Discounted <code class="text-amber-300">care_sites</code> entries that are mobile vans (<code class="text-amber-300">Mobile Sprinter Medical Unit</code>), school-restricted clinics, or part-time clinics open &lt;20 hrs/wk.</li>
+              <li><strong>Cross-Border FQHC Adjustment:</strong> Penalized North Fulton border tracts that sit 7–12 km from Gwinnett/Forsyth FQHCs in <code class="text-sky-300">care_sites_state</code>.</li>
+              <li><strong>Transit-Locked Chronic Burden Weighting + NP Field Reports:</strong> Prioritized tracts where vehiclelessness (33%–49.4%) compounds severe diabetes (18.9%–25.1%) and hypertension (43%–54.6%).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-base font-bold text-white mb-3">Approved 4-Saturday Mobile Clinic Deployment Schedule (Pass 2)</h3>
+          <div id="part1StopCards" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </div>
+      </div>
+
+      <!-- TAB 2: PART 2 — WHAT WE COULD NOT TELL YOU -->
+      <div id="tab-part2" class="tab-panel hidden p-5 space-y-6">
+        <div>
+          <h3 class="text-base font-bold text-white">1. Four Incompatible Spatial & Temporal Grains in <code class="text-sky-400">a4i_health</code></h3>
+          <p class="text-xs text-slate-400 mt-1">Treating every table with an 11-digit <code class="text-sky-400">geo_id</code> as neighborhood-level truth is a methodological error. The broker enforces strict per-table operational boundaries:</p>
+          <div class="overflow-x-auto mt-3">
+            <table class="w-full text-xs text-left border border-slate-800">
+              <thead class="bg-slate-800/90 text-slate-300">
+                <tr>
+                  <th class="p-2.5 border border-slate-700">BigQuery Table</th>
+                  <th class="p-2.5 border border-slate-700">Apparent Key</th>
+                  <th class="p-2.5 border border-slate-700">True Spatial & Temporal Grain</th>
+                  <th class="p-2.5 border border-slate-700">Modeled vs. Measured</th>
+                  <th class="p-2.5 border border-slate-700">Fulton County Trap & Broker Rule</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800 text-slate-300">
+                <tr>
+                  <td class="p-2.5 font-mono text-sky-400">burden_tracts (326 rows)</td>
+                  <td class="p-2.5">11-digit Tract</td>
+                  <td class="p-2.5">2020 Census Tract (PLACES 2024 / BRFSS 2021–2022 + SVI 2022 / ACS 2018–2022)</td>
+                  <td class="p-2.5"><span class="text-amber-300 font-semibold">PLACES = MRP Model</span> (with 95% CIs); <span class="text-emerald-300 font-semibold">SVI = Measured ACS</span></td>
+                  <td class="p-2.5"><code class="text-rose-300">pct_checkup</code> is inverted (low=bad); two uninsured columns (<code class="text-sky-300">18–64</code> vs <code class="text-sky-300">all_ages</code>); SVI Theme 3 excluded.</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 font-mono text-sky-400">tract_access + care_sites (124 rows)</td>
+                  <td class="p-2.5">11-digit Tract / Point</td>
+                  <td class="p-2.5">Great-circle centroid distance (km) to HRSA/POS points</td>
+                  <td class="p-2.5">Computed geometry + administrative registry</td>
+                  <td class="p-2.5">Counts 4–8 hr/wk clinics, school-only clinics, and mobile vans as full-time fixed safety-net clinics; stops at county border (vs 1,133 rows in <code class="text-sky-300">care_sites_state</code>).</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 font-mono text-sky-400">exposure_tracts (327 rows)</td>
+                  <td class="p-2.5">11-digit Tract</td>
+                  <td class="p-2.5"><span class="text-rose-400 font-bold">12 km EPA Downscaler Grid</span> wearing a tract ID · <span class="text-rose-400 font-bold">2021 Only</span></td>
+                  <td class="p-2.5">Atmospheric model interpolation (2x duplicate daily rows corrected)</td>
+                  <td class="p-2.5"><code class="text-amber-300">mean_pm</code> spans only <code class="text-amber-300">8.98–9.81 µg/m³</code> (<code class="text-amber-300">p90/p10 = 1.051x</code>). Has 327 rows vs 326 in <code class="text-sky-300">burden_tracts</code> (unpopulated airport tract <code class="text-rose-300">13121980000</code>). Never rank tracts on PM2.5!</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 font-mono text-sky-400">disease_weekly (184 rows)</td>
+                  <td class="p-2.5">nssp_id (HSA 69)</td>
+                  <td class="p-2.5"><span class="text-rose-400 font-bold">4-County Health Service Area</span> (Fulton, Clayton, DeKalb, Gwinnett) · Weekly</td>
+                  <td class="p-2.5">Measured NSSP emergency department visit shares</td>
+                  <td class="p-2.5">Identical across all 326 Fulton tracts. Used strictly to time deployments and stock rapid Influenza / COVID-19 / RSV test & vaccine kits.</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 font-mono text-sky-400">shortage_areas (0 rows) & shortage_facilities (6 rows)</td>
+                  <td class="p-2.5">HPSA Polygon / Point</td>
+                  <td class="p-2.5">HRSA Primary Care HPSA Layer 8 (polygons) & Layer 9 (points)</td>
+                  <td class="p-2.5">Federal administrative designation</td>
+                  <td class="p-2.5"><code class="text-rose-400 font-bold">0 live rows in shortage_areas</code> because all 99 Fulton HPSA polygons are <code class="text-rose-300">Proposed For Withdrawal</code>. <code class="text-sky-300">shortage_facilities</code> marks where care already is—never UNION them!</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+            <h4 class="text-sm font-bold text-amber-300">2. The Facility Capacity Illusion in <code class="text-sky-400">care_sites</code></h4>
+            <p class="text-xs text-slate-300">
+              <code class="text-sky-400">tract_access.km_to_safety_net</code> treats every non-hospital point in <code class="text-sky-400">care_sites</code> as equivalent. Inspecting <code class="text-sky-400">TOT_OPER_HR_PER_WEEK</code> and facility names reveals part-time clinics, school-restricted sites, and mobile vans whose garage addresses make surrounding high-burden tracts look artificially "covered":
+            </p>
+            <div id="part2ConstrainedClinics" class="max-h-64 overflow-y-auto mt-2"></div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+            <h4 class="text-sm font-bold text-sky-300">3. Cross-County Border FQHCs (<code class="text-sky-400">care_sites_state</code>) & Federal HPSA Vacuum</h4>
+            <p class="text-xs text-slate-300">
+              <code class="text-sky-400">care_sites</code> clips at the Fulton County line, making North Fulton border tracts appear 22–28.6 km from a safety-net clinic when <code class="text-sky-400">care_sites_state</code> shows FQHCs just across the border in Gwinnett or Forsyth:
+            </p>
+            <div id="part2CrossBorderTable" class="mt-2"></div>
+            <div class="mt-3 pt-3 border-t border-slate-800">
+              <div class="text-xs font-semibold text-rose-300">6 Point Designations in <code class="text-sky-400">shortage_facilities</code> (Where Care Already Exists):</div>
+              <div id="part2ShortageFacilities" class="mt-1.5 text-[11px] text-slate-300 space-y-1"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: PART 3 — WHO THIS PLAN LANDS ON -->
+      <div id="tab-part3" class="tab-panel hidden p-5 space-y-6">
+        <div class="p-4 rounded-xl bg-sky-950/25 border border-sky-800/60">
+          <h3 class="text-sm font-bold text-sky-300">Why Race & Ethnicity Are Audited Post-Hoc (Not Used as Siting Inputs)</h3>
+          <p class="text-xs text-slate-300 mt-1">
+            CDC/ATSDR SVI Theme 3 (<code class="text-sky-300">RPL_THEME3</code> — Racial & Ethnic Minority Status) and overall <code class="text-sky-300">RPL_THEMES</code> (which bakes Theme 3 in) were deliberately withheld from <code class="text-sky-300">burden_tracts</code> and from the <code class="text-sky-300">siting_planner</code> agent so that race is never used as a proxy for clinical need. Instead, the isolated <code class="text-sky-300">equity_and_rigor_auditor</code> joins <code class="text-sky-300">a4i_health.audit_tract_diagnostics</code> <strong>after</strong> candidate selection to verify who the plan actually serves and identify language-access mandates.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div class="lg:col-span-5 p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+            <h4 class="text-sm font-bold text-white">Population-Weighted Plan Landing vs. Fulton County Baseline</h4>
+            <div id="equityComparisonBars" class="space-y-3 pt-1"></div>
+          </div>
+
+          <div class="lg:col-span-7 p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+            <h4 class="text-sm font-bold text-white">Stop-by-Stop SVI Theme 3, ACS Demographics & 95% Confidence Intervals</h4>
+            <div id="stopDemographicsTable" class="overflow-x-auto"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: PART 4 — BILINGUAL COMMUNITY OUTREACH -->
+      <div id="tab-part4" class="tab-panel hidden p-5 space-y-6">
+        <div class="p-4 rounded-xl bg-emerald-950/25 border border-emerald-800/60 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-bold text-emerald-300">Plain-Language Bilingual Community Outreach (English + Español · 6th-Grade Reading Level)</h3>
+            <p class="text-xs text-slate-300 mt-0.5">
+              Generated by <code class="text-emerald-300">community_outreach_writer</code> under strict instructions that conflict with the technical writer: zero FIPS codes, zero confidence intervals, zero epidemiological acronyms—focused on familiar neighborhood landmarks, MARTA bus/rail lines, free walk-in care, and Spanish interpretation.
+            </p>
+          </div>
+        </div>
+
+        <div id="bilingualFlyerCards" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+
+        <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+          <h4 class="text-sm font-bold text-sky-300 mb-2">Full Agent-Generated Bilingual Outreach Package (<code class="text-sky-400">session.state['community_outreach']</code>)</h4>
+          <div id="agentOutreachMarkdown" class="markdown-body"></div>
+        </div>
+      </div>
+
+      <!-- TAB 5: ADK ARCHITECTURE, SESSION.STATE & NP FIELD REPORT LOOP -->
+      <div id="tab-judge" class="tab-panel hidden p-5 space-y-6">
+        <!-- The 4 Judge Questions -->
+        <div>
+          <h3 class="text-base font-bold text-white mb-3">How This Multi-Agent System Answers the 4 Challenge Judge Questions</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1.5">
+              <div class="text-sky-400 font-bold">1. Does every agent in the diagram earn its keep?</div>
+              <p class="text-slate-300">
+                Yes—deleting any of the 8 agents removes either a BigQuery data domain or a required governance step:
+                <code class="text-sky-300">burden_analyst</code> (PLACES/SVI + Google BigQuery MCP),
+                <code class="text-sky-300">access_analyst</code> (distances, clinic hours, HPSA vacuum),
+                <code class="text-sky-300">context_surveillance_analyst</code> (12 km PM2.5 & 4-county HSA guardrails),
+                <code class="text-sky-300">siting_planner</code> (blinded operational optimizer),
+                <code class="text-sky-300">equity_and_rigor_auditor</code> (exclusive holder of SVI Theme 3 & 95% CIs),
+                <code class="text-sky-300">clinical_accountability_writer</code> (Parts 1–3 technical brief),
+                <code class="text-sky-300">community_outreach_writer</code> (Part 4 bilingual 6th-grade flyers), and
+                <code class="text-sky-300">clinic_plan_synthesizer</code>.
+              </p>
+            </div>
+            <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1.5">
+              <div class="text-sky-400 font-bold">2. How does state move between agents?</div>
+              <p class="text-slate-300">
+                Explicitly via ADK <code class="text-emerald-300">session.state</code> keys (<code class="text-emerald-300">output_key</code> and <code class="text-emerald-300">tool_context.state</code>):
+                parallel analysts write <code class="text-sky-300">{burden_evidence}</code>, <code class="text-sky-300">{access_evidence}</code>, and <code class="text-sky-300">{regional_context}</code>;
+                inside the <code class="text-sky-300">LoopAgent</code>, <code class="text-sky-300">siting_planner</code> writes <code class="text-sky-300">candidate_plan</code> and <code class="text-sky-300">equity_and_rigor_auditor</code> writes <code class="text-sky-300">audit_verdict</code>, <code class="text-sky-300">audit_feedback</code>, and <code class="text-sky-300">rejected_first_plan</code> before setting <code class="text-emerald-300">tool_context.actions.escalate = True</code> on Pass 2 approval.
+              </p>
+            </div>
+            <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1.5">
+              <div class="text-sky-400 font-bold">3. Do at least two agents have genuinely conflicting instructions?</div>
+              <p class="text-slate-300">
+                Two pairs conflict by design: (A) <code class="text-sky-300">siting_planner</code> (blinded to race, optimizes coverage) vs. <code class="text-rose-300">equity_and_rigor_auditor</code> (adversarial skeptic armed with SVI Theme 3 & 95% CIs); and (B) <code class="text-sky-300">clinical_accountability_writer</code> (hedged, cites CIs & grain flaws) vs. <code class="text-emerald-300">community_outreach_writer</code> (warm, 6th-grade reading level, bilingual EN/ES, zero jargon).
+              </p>
+            </div>
+            <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1.5">
+              <div class="text-sky-400 font-bold">4. Can the system reject its own first answer?</div>
+              <p class="text-slate-300">
+                Yes: Pass 1 (<code class="text-rose-300">13121011431, 13121011421, 13121011430, 13121011432</code>) clusters all 4 stops within 0.46–1.58 km in North Fulton with overlapping 95% CIs and max 12.2% diabetes. The Auditor rejects Pass 1, forcing Pass 2 (<code class="text-emerald-300">13121007603, 13121010214, 13121007400, 13121002300</code>) across 4 distinct corridors.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nurse Practitioner Ground-Truth Field Feedback Loop -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div class="lg:col-span-5 p-4 rounded-xl bg-slate-950/70 border border-indigo-900/60 space-y-3">
+            <h4 class="text-sm font-bold text-indigo-300">Nurse Practitioner & CHW Field Feedback Loop (<code class="text-sky-400">a4i_health.field_reports</code>)</h4>
+            <p class="text-xs text-slate-300">
+              Log a new Saturday ground-truth barrier into BigQuery and immediately re-run the siting broker:
+            </p>
+            <div class="space-y-2 text-xs">
+              <div>
+                <label class="block text-slate-400 mb-1">Census Tract GEOID (11-digit)</label>
+                <input id="frGeoId" type="text" value="13121007603" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white font-mono" />
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-slate-400 mb-1">Reporter Role</label>
+                  <input id="frRole" type="text" value="Mobile Van Nurse Practitioner" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white" />
+                </div>
+                <div>
+                  <label class="block text-slate-400 mb-1">Severity Multiplier</label>
+                  <input id="frSeverity" type="number" step="0.05" value="1.25" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-slate-400 mb-1">Verified Staging Landmark</label>
+                <input id="frLandmark" type="text" value="East Point MARTA Station & Commons Lot (2848 East Main St)" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white" />
+              </div>
+              <div>
+                <label class="block text-slate-400 mb-1">Field Observation Notes</label>
+                <textarea id="frNotes" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white">Nearest listed clinic is a Mobile Sprinter unit not parked here on Saturdays; 49% of households lack vehicles and rely on MARTA rail/bus.</textarea>
+              </div>
+              <button onclick="submitFieldReport()" id="submitFrBtn" class="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow transition">
+                + Log Field Report to BigQuery & Recompute Siting
+              </button>
+            </div>
+          </div>
+
+          <div class="lg:col-span-7 p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+            <h4 class="text-sm font-bold text-white">Active Field Intelligence Logged in BigQuery (<code class="text-sky-400">a4i_health.field_reports</code>)</h4>
+            <div id="fieldReportsList" class="space-y-2 max-h-72 overflow-y-auto"></div>
+          </div>
+        </div>
+
+        <!-- Live ADK Session State & Full Synthesizer Output -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div class="lg:col-span-5 p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+            <h4 class="text-sm font-bold text-sky-300">ADK Multi-Agent Event Trace (<code class="text-sky-400">InMemoryRunner</code>)</h4>
+            <div id="agentEventTrace" class="space-y-2 max-h-[520px] overflow-y-auto text-xs"></div>
+          </div>
+          <div class="lg:col-span-7 p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h4 class="text-sm font-bold text-emerald-300">Inspect <code class="text-emerald-400">session.state</code> Keys</h4>
+              <select id="stateKeySelector" onchange="renderSelectedStateKey()" class="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-200">
+                <option value="final_clinic_plan">final_clinic_plan (Synthesizer Output)</option>
+                <option value="accountability_brief">accountability_brief (Parts 1–3 Technical Writer)</option>
+                <option value="community_outreach">community_outreach (Part 4 Bilingual CHW Writer)</option>
+                <option value="audit_report_summary">audit_report_summary (Equity & Rigor Auditor)</option>
+                <option value="candidate_plan_summary">candidate_plan_summary (Siting Planner)</option>
+                <option value="burden_evidence">burden_evidence (Burden Analyst + BigQuery MCP)</option>
+                <option value="access_evidence">access_evidence (Spatial Access Analyst)</option>
+                <option value="regional_context">regional_context (Exposure & Surveillance Analyst)</option>
+              </select>
+            </div>
+            <div id="stateKeyContent" class="markdown-body max-h-[520px] overflow-y-auto p-3 rounded bg-slate-900/90 border border-slate-800"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let DASHBOARD = null;
+    let map = null;
+    let tractLayerGroup = null;
+    let overlayLayerGroup = null;
+
+    const BILINGUAL_FLYERS = [
+      {
+        stop_rank: 1,
+        geo_id: "13121007603",
+        neighborhood: "East Point / Tri-Cities",
+        saturday: "Saturday #1 (Week 1) · 9:00 AM – 3:00 PM",
+        landmark_en: "East Point MARTA Station & Commons Parking Lot (2848 East Main St, East Point)",
+        transit_en: "Direct walk from East Point MARTA Rail Station & Routes 79 / 181 / 191",
+        en_title: "FREE Neighborhood Health Van — East Point & Tri-Cities!",
+        en_bullets: [
+          "Free blood sugar (diabetes) & A1C finger-stick check",
+          "Free blood pressure check, heart health visit & 30-day blood pressure cuffs",
+          "Free breathing & asthma check + inhalers",
+          "Free flu & COVID-19 shots for adults",
+          "No health insurance needed · No ID or appointment needed · Walk right up!"
+        ],
+        en_sms: "FREE Mobile Health Clinic this Saturday 9am-3pm at East Point MARTA Commons (2848 E Main St)! Free diabetes, blood pressure & asthma checks. No insurance or appointment needed. Info in English & Español.",
+        es_title: "¡Clínica Móvil de Salud GRATIS en East Point y Tri-Cities!",
+        es_bullets: [
+          "Chequeo GRATIS de azúcar en la sangre (diabetes) y prueba A1C",
+          "Chequeo GRATIS de presión arterial y consulta del corazón",
+          "Chequeo GRATIS de respiración y asma",
+          "No necesita seguro médico · No necesita cita · ¡Intérpretes en español disponibles!"
+        ],
+        es_sms: "¡Clínica Móvil de Salud GRATIS este sábado de 9am a 3pm en la estación MARTA de East Point (2848 E Main St)! Chequeos gratis de diabetes, presión arterial y asma. Sin seguro ni cita. ¡Hablamos español!"
+      },
+      {
+        stop_rank: 2,
+        geo_id: "13121010214",
+        neighborhood: "Roswell Rd / North Fulton Corridor",
+        saturday: "Saturday #2 (Week 2) · 9:00 AM – 3:00 PM",
+        landmark_en: "Roswell Road Community Center & Transit Plaza (Roswell / Sandy Springs N Corridor)",
+        transit_en: "MARTA Route 85 (Roswell Rd) & Route 87 bus stop right at the plaza",
+        en_title: "FREE Saturday Mobile Health Clinic — Roswell Rd Corridor!",
+        en_bullets: [
+          "Free general checkups, blood pressure & diabetes screenings",
+          "Free help signing up for sliding-scale charity care & low-cost prescriptions",
+          "Free adult vaccines & respiratory testing",
+          "No insurance needed · No appointment needed · Full Spanish/English team on site!"
+        ],
+        en_sms: "FREE Saturday Health Clinic 9am-3pm at Roswell Rd Community Plaza (MARTA Bus 85/87)! Free checkups, blood pressure & diabetes care, no insurance needed. Intérpretes en español en el lugar.",
+        es_title: "¡Clínica Móvil de Salud GRATIS los Sábados — Corredor de Roswell Rd!",
+        es_bullets: [
+          "Consultas médicas GRATIS, chequeo de presión arterial y diabetes",
+          "Ayuda GRATIS para inscribirse en clínicas de bajo costo y recetas económicas",
+          "Atención completamente en español e inglés · No necesita seguro médico ni cita previa"
+        ],
+        es_sms: "¡Clínica de Salud GRATIS este sábado 9am-3pm en Roswell Rd Community Plaza (Autobús MARTA 85/87)! Chequeos médicos, diabetes y presión gratis. Sin seguro ni cita. ¡Personal bilingüe en español!"
+      },
+      {
+        stop_rank: 3,
+        geo_id: "13121007400",
+        neighborhood: "Lakewood / Browns Mill / Southeast Atlanta",
+        saturday: "Saturday #3 (Week 3) · 9:00 AM – 3:00 PM",
+        landmark_en: "South Bend / Lakewood Community Center Lot (1955 Compton Dr SE, Atlanta)",
+        transit_en: "Served by MARTA Bus Routes 42 (Pryor Rd) & 55 (Jonesboro Rd)",
+        en_title: "FREE Mobile Health Van — Lakewood & South River!",
+        en_bullets: [
+          "Free blood pressure, cholesterol & blood sugar checks",
+          "Free asthma & breathing evaluations + seasonal vaccines",
+          "Free connections to full-time local doctors and discounted pharmacy cards",
+          "100% Free · Walk-ins welcome · English & Spanish interpreters ready to help!"
+        ],
+        en_sms: "FREE Neighborhood Health Van this Saturday 9am-3pm at South Bend / Lakewood Center (1955 Compton Dr SE, MARTA Bus 42/55)! Free blood pressure, diabetes & asthma care. No insurance needed. Hablamos español.",
+        es_title: "¡Unidad Móvil de Salud GRATIS — Lakewood y Sur de Atlanta!",
+        es_bullets: [
+          "Exámenes GRATIS de presión arterial, colesterol y azúcar en la sangre (diabetes)",
+          "Evaluación GRATIS de asma y vacunas de temporada",
+          "100% Gratis · No necesita seguro médico ni cita · ¡Contamos con intérpretes médicos en español!"
+        ],
+        es_sms: "¡Unidad Móvil de Salud GRATIS este sábado 9am-3pm en South Bend / Lakewood (1955 Compton Dr SE, Autobús MARTA 42/55)! Exámenes gratis de diabetes y presión. Sin seguro ni cita. ¡Hablamos español!"
+      },
+      {
+        stop_rank: 4,
+        geo_id: "13121002300",
+        neighborhood: "West End / Ashview Heights / AUC Corridor",
+        saturday: "Saturday #4 (Week 4) · 9:00 AM – 3:00 PM",
+        landmark_en: "West Hunter Street / West End Community Plaza (Near Ashby & West Lake MARTA)",
+        transit_en: "Steps from Ashby / West Lake MARTA Rail & Routes 50 / 58 / 71",
+        en_title: "FREE Saturday Health & Wellness Van — Westside / AUC!",
+        en_bullets: [
+          "Free diabetes (A1C), kidney & high blood pressure screenings",
+          "Free asthma & COPD breathing checks + portable lung testing",
+          "Mobility-friendly ramp access right at street level for seniors",
+          "No insurance required · No out-of-pocket cost · Walk-ins welcome!"
+        ],
+        en_sms: "FREE Mobile Health Van this Saturday 9am-3pm at West End / West Hunter Plaza (near Ashby MARTA)! Free blood pressure, diabetes & breathing checks. Wheelchair accessible, no insurance needed.",
+        es_title: "¡Clínica Móvil de Salud y Bienestar GRATIS — West End / Westside!",
+        es_bullets: [
+          "Pruebas GRATIS de diabetes (A1C) y presión arterial alta",
+          "Chequeo GRATIS de asma, pulmones y entrega de inhaladores",
+          "Acceso con rampa para adultos mayores · Sin seguro médico ni cita previa"
+        ],
+        es_sms: "¡Clínica Móvil GRATIS este sábado 9am-3pm en West End / West Hunter Plaza (cerca de MARTA Ashby)! Pruebas gratis de diabetes, presión y asma. Sin seguro ni cita."
+      }
+    ];
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tabId).classList.remove('hidden');
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.className = "tab-btn px-4 py-2.5 text-xs font-semibold rounded-t-lg text-slate-400 hover:text-white";
+      });
+      const activeBtn = document.getElementById('btn-' + tabId);
+      activeBtn.className = "tab-btn px-4 py-2.5 text-xs font-bold rounded-t-lg bg-slate-800 text-emerald-400 border-t border-x border-slate-700";
+    }
+
+    function getColorForValue(metric, val) {
+      if (val === null || val === undefined) return "#475569";
+      let norm = 0;
+      if (metric === "pct_uninsured") norm = Math.min(1, Math.max(0, (val - 4) / 24));
+      else if (metric === "pct_diabetes") norm = Math.min(1, Math.max(0, (val - 5) / 20));
+      else if (metric === "pct_no_vehicle") norm = Math.min(1, Math.max(0, val / 45));
+      else if (metric === "km_to_fulltime_safety_net") norm = Math.min(1, Math.max(0, val / 18));
+      else if (metric === "svi_theme3_minority") norm = Math.min(1, Math.max(0, val));
+
+      if (norm > 0.78) return "#f43f5e";
+      if (norm > 0.56) return "#fb923c";
+      if (norm > 0.35) return "#facc15";
+      if (norm > 0.18) return "#38bdf8";
+      return "#1e293b";
+    }
+
+    function initMap() {
+      map = L.map('map').setView([33.79, -84.38], 10);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        maxZoom: 18
+      }).addTo(map);
+      tractLayerGroup = L.layerGroup().addTo(map);
+      overlayLayerGroup = L.layerGroup().addTo(map);
+    }
+
+    function renderTractLayer() {
+      if (!DASHBOARD || !tractLayerGroup) return;
+      tractLayerGroup.clearLayers();
+      const metric = document.getElementById('choroplethMetric').value;
+
+      DASHBOARD.tracts.forEach(t => {
+        const color = getColorForValue(metric, t[metric]);
+        const circle = L.circleMarker([t.latitude, t.longitude], {
+          radius: 4.5,
+          fillColor: color,
+          color: "#0f172a",
+          weight: 0.7,
+          fillOpacity: 0.78
+        });
+        circle.bindPopup(`
+          <div class="text-xs space-y-1">
+            <div class="font-bold text-sky-300">Tract ${t.geo_id}</div>
+            <div class="text-slate-300">${t.corridor_name} · Pop: ${t.total_pop.toLocaleString()}</div>
+            <hr class="border-slate-700 my-1"/>
+            <div><strong>Uninsured (18–64):</strong> ${t.pct_uninsured}% <span class="text-slate-400">${t.uninsured_ci_text || ''}</span></div>
+            <div><strong>Diabetes:</strong> ${t.pct_diabetes}% <span class="text-slate-400">${t.diabetes_ci_text || ''}</span> · <strong>High BP:</strong> ${t.pct_high_bp}%</div>
+            <div><strong>No Vehicle (SVI):</strong> ${t.pct_no_vehicle ?? 'N/A'}% · <strong>Missed Checkup:</strong> ${t.pct_missed_checkup}%</div>
+            <div><strong>Nearest Listed Safety-Net:</strong> ${t.km_to_safety_net} km (${t.nearest_safety_net_name || 'N/A'})</div>
+            <div><strong>Full-Time Brick & Mortar Safety-Net:</strong> ${t.km_to_fulltime_safety_net} km</div>
+            <div class="text-sky-300 pt-1"><strong>Post-Hoc SVI Theme 3:</strong> ${t.svi_theme3_minority} (${t.pct_minority}% Minority · ${t.pct_black}% Black · ${t.pct_hispanic}% Hispanic)</div>
+          </div>
+        `);
+        tractLayerGroup.addLayer(circle);
+      });
+    }
+
+    function updateMapOverlays() {
+      if (!DASHBOARD || !overlayLayerGroup) return;
+      overlayLayerGroup.clearLayers();
+
+      const showPass2 = document.getElementById('togglePass2').checked;
+      const showPass1 = document.getElementById('togglePass1').checked;
+      const showFullSites = document.getElementById('toggleCareSites').checked;
+      const showConstrained = document.getElementById('toggleConstrainedSites').checked;
+
+      // Care sites
+      DASHBOARD.care_sites.forEach(s => {
+        const isConstrained = s.is_mobile || s.is_school || s.is_part_time;
+        if (isConstrained && !showConstrained) return;
+        if (!isConstrained && !showFullSites) return;
+
+        const m = L.circleMarker([s.latitude, s.longitude], {
+          radius: isConstrained ? 5 : 4,
+          fillColor: isConstrained ? "#fbbf24" : "#38bdf8",
+          color: "#020617",
+          weight: 1,
+          fillOpacity: 0.9
+        });
+        const tag = s.is_mobile ? "⚠️ MOBILE VAN LISTING" : (s.is_school ? "⚠️ SCHOOL-BASED CLINIC" : (s.is_part_time ? `⚠️ PART-TIME (${s.hours_per_week} hrs/wk)` : "Full-Time Facility"));
+        m.bindPopup(`
+          <div class="text-xs space-y-1">
+            <div class="font-bold ${isConstrained ? 'text-amber-300' : 'text-sky-300'}">${s.name}</div>
+            <div>${s.site_kind} · ${s.city || 'Fulton County'}</div>
+            <div><strong>Hours/Week:</strong> ${s.hours_per_week ?? 'Unreported'} · <strong>Audit Status:</strong> ${tag}</div>
+          </div>
+        `);
+        overlayLayerGroup.addLayer(m);
+      });
+
+      // Pass 1 Rejected Stops + Cannibalization Lines
+      if (showPass1 && DASHBOARD.pass1_plan && DASHBOARD.pass1_plan.selected_stops) {
+        const p1Stops = DASHBOARD.pass1_plan.selected_stops;
+        for (let i = 0; i < p1Stops.length; i++) {
+          for (let j = i + 1; j < p1Stops.length; j++) {
+            const line = L.polyline(
+              [[p1Stops[i].latitude, p1Stops[i].longitude], [p1Stops[j].latitude, p1Stops[j].longitude]],
+              { color: "#ef4444", weight: 2.5, dashArray: "5, 5", opacity: 0.85 }
+            );
+            overlayLayerGroup.addLayer(line);
+          }
+        }
+        p1Stops.forEach(s => {
+          const icon = L.divIcon({
+            className: "",
+            html: `<div class="stop-badge-reject" title="Rejected Pass 1 Stop #${s.stop_rank}">P1</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+          });
+          const marker = L.marker([s.latitude, s.longitude], { icon });
+          marker.bindPopup(`
+            <div class="text-xs space-y-1">
+              <div class="font-bold text-rose-400">❌ REJECTED PASS 1 STOP #${s.stop_rank}: Tract ${s.geo_id}</div>
+              <div>${s.corridor_name}</div>
+              <div><strong>Why Rejected:</strong> Clustered 0.46–1.58 km from other Pass 1 stops with overlapping 95% CIs (${s.key_metrics.pct_uninsured_18_64_places}% uninsured, only ${s.key_metrics.pct_diabetes}% diabetes).</div>
+            </div>
+          `);
+          overlayLayerGroup.addLayer(marker);
+        });
+      }
+
+      // Pass 2 Approved Stops
+      if (showPass2 && DASHBOARD.pass2_plan && DASHBOARD.pass2_plan.selected_stops) {
+        DASHBOARD.pass2_plan.selected_stops.forEach(s => {
+          const icon = L.divIcon({
+            className: "",
+            html: `<div class="stop-badge-approve" title="Approved Pass 2 Stop #${s.stop_rank}">#${s.stop_rank}</div>`,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          });
+          const marker = L.marker([s.latitude, s.longitude], { icon });
+          marker.bindPopup(`
+            <div class="text-xs space-y-1">
+              <div class="font-bold text-emerald-400">✅ APPROVED PASS 2 STOP #${s.stop_rank}: Tract ${s.geo_id}</div>
+              <div class="font-semibold text-white">${s.staging_landmark}</div>
+              <div class="text-slate-300">${s.corridor_name} · ${s.schedule_slot}</div>
+              <hr class="border-slate-700 my-1"/>
+              <div><strong>Uninsured (18–64):</strong> ${s.key_metrics.pct_uninsured_18_64_places}% · <strong>Diabetes:</strong> ${s.key_metrics.pct_diabetes}% · <strong>High BP:</strong> ${s.key_metrics.pct_high_bp}%</div>
+              <div><strong>No-Vehicle Households:</strong> ${s.key_metrics.pct_no_vehicle}% · <strong>Full-Time Clinic Distance:</strong> ${s.key_metrics.km_to_fulltime_brick_mortar_safety_net} km</div>
+              <div class="text-amber-300"><strong>Facility Audit:</strong> ${s.facility_capacity_context}</div>
+            </div>
+          `);
+          overlayLayerGroup.addLayer(marker);
+        });
+      }
+    }
+
+    function renderAllPanels() {
+      if (!DASHBOARD) return;
+
+      // Pass 1 violations preview
+      const p1Violations = DASHBOARD.pass1_audit.violations || [];
+      document.getElementById('pass1ViolationPreview').innerHTML = p1Violations.slice(0, 3).map(v => `<li>${v}</li>`).join('');
+      document.getElementById('pass1DetailedViolations').innerHTML = p1Violations.map(v => `
+        <div class="p-2 rounded bg-rose-950/50 border border-rose-800/50">⚠️ ${v}</div>
+      `).join('');
+      document.getElementById('pass1CiOverlaps').innerHTML = (DASHBOARD.pass1_audit.statistical_ci_overlap_notes || []).slice(0, 4).map(c => `
+        <div class="p-1.5 rounded bg-slate-900 border border-slate-800">📊 ${c}</div>
+      `).join('');
+
+      // Sidebar & Part 1 Stop Cards
+      const p2Stops = DASHBOARD.pass2_plan.selected_stops || [];
+      const auditDiagMap = {};
+      (DASHBOARD.pass2_audit.post_hoc_equity_and_demographic_audit.stop_by_stop_diagnostics || []).forEach(d => {
+        auditDiagMap[d.geo_id] = d;
+      });
+
+      document.getElementById('sidebarStopList').innerHTML = p2Stops.map(s => `
+        <div onclick="map.flyTo([${s.latitude}, ${s.longitude}], 13)" class="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 hover:border-emerald-500/60 cursor-pointer transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-emerald-400">Stop #${s.stop_rank} · Tract ${s.geo_id}</span>
+            <span class="text-[11px] text-slate-400">Pop ${s.total_pop.toLocaleString()}</span>
+          </div>
+          <div class="text-xs font-semibold text-white mt-0.5">${s.corridor_name}</div>
+          <div class="text-[11px] text-slate-400 truncate">${s.staging_landmark}</div>
+          <div class="flex flex-wrap gap-2 mt-1.5 text-[11px]">
+            <span class="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300">Diabetes ${s.key_metrics.pct_diabetes}%</span>
+            <span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">No-Veh ${s.key_metrics.pct_no_vehicle}%</span>
+            <span class="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300">Uninsured ${s.key_metrics.pct_uninsured_18_64_places}%</span>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('part1StopCards').innerHTML = p2Stops.map(s => {
+        const diag = auditDiagMap[s.geo_id] || {};
+        const cis = diag.places_95_confidence_intervals || {};
+        return `
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <span class="px-2 py-0.5 text-[11px] font-bold bg-emerald-500/20 text-emerald-300 rounded">${s.schedule_slot}</span>
+                <h4 class="text-base font-bold text-white mt-1">Stop #${s.stop_rank}: ${s.corridor_name} (<code class="text-emerald-400">${s.geo_id}</code>)</h4>
+                <div class="text-xs text-sky-300 font-medium mt-0.5">📍 ${s.staging_landmark}</div>
+              </div>
+              <button onclick="map.flyTo([${s.latitude}, ${s.longitude}], 13)" class="px-2.5 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-200">Zoom Map</button>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              <div class="p-2 rounded bg-slate-900 border border-slate-800">
+                <div class="text-[10px] text-slate-400">Uninsured (18–64 / All)</div>
+                <div class="font-bold text-white">${cis.uninsured_18_64 || (s.key_metrics.pct_uninsured_18_64_places + '%')}</div>
+                <div class="text-[10px] text-slate-400">All-Ages: ${s.key_metrics.pct_uninsured_all_ages_svi}% (Gap ${s.key_metrics.uninsured_gap}%)</div>
+              </div>
+              <div class="p-2 rounded bg-slate-900 border border-slate-800">
+                <div class="text-[10px] text-slate-400">Diabetes & High BP</div>
+                <div class="font-bold text-rose-300">${cis.diabetes || (s.key_metrics.pct_diabetes + '%')}</div>
+                <div class="text-[10px] text-slate-400">Hypertension: ${cis.high_bp || (s.key_metrics.pct_high_bp + '%')}</div>
+              </div>
+              <div class="p-2 rounded bg-slate-900 border border-slate-800">
+                <div class="text-[10px] text-slate-400">Transit Lock (SVI ACS)</div>
+                <div class="font-bold text-amber-300">${s.key_metrics.pct_no_vehicle}% No Vehicle</div>
+                <div class="text-[10px] text-slate-400">Mobility Diff: ${s.key_metrics.pct_mobility_difficulty}%</div>
+              </div>
+            </div>
+
+            <div class="text-xs space-y-1 bg-slate-900/80 p-2.5 rounded border border-slate-800">
+              <div><strong class="text-amber-300">Facility Capacity Audit:</strong> ${s.facility_capacity_context} (Raw distance: ${s.key_metrics.km_to_safety_net_raw} km → Full-Time Brick-and-Mortar: <strong>${s.key_metrics.km_to_fulltime_brick_mortar_safety_net} km</strong>)</div>
+              <div><strong class="text-indigo-300">NP Field Intelligence:</strong> ${s.field_intelligence_applied}</div>
+            </div>
+
+            <div>
+              <div class="text-[11px] font-semibold text-slate-400 uppercase mb-1">Tailored Saturday Clinical Supply Kit:</div>
+              <div class="flex flex-wrap gap-1.5">
+                ${(s.recommended_clinical_kit || []).map(k => `<span class="px-2 py-0.5 text-[11px] rounded bg-emerald-950/60 border border-emerald-800/60 text-emerald-200">${k}</span>`).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Part 2 Tables
+      const constrained = DASHBOARD.access_summary.limited_capacity_or_restricted_sites_in_care_sites || [];
+      document.getElementById('part2ConstrainedClinics').innerHTML = `
+        <table class="w-full text-[11px] border border-slate-800">
+          <thead class="bg-slate-900 text-slate-400">
+            <tr><th class="p-1.5 border border-slate-800">Facility Name in care_sites</th><th class="p-1.5 border border-slate-800">City</th><th class="p-1.5 border border-slate-800">Hours/Wk</th></tr>
+          </thead>
+          <tbody>
+            ${constrained.map(c => `
+              <tr class="border-t border-slate-800">
+                <td class="p-1.5 text-amber-300 font-medium">${c.FACILITY_NM}</td>
+                <td class="p-1.5 text-slate-300">${c.city || ''}</td>
+                <td class="p-1.5 text-rose-300 font-mono">${c.hours_per_week ?? 'School/Mobile'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      const cbExamples = DASHBOARD.access_summary.cross_county_border_findings.examples || [];
+      document.getElementById('part2CrossBorderTable').innerHTML = `
+        <table class="w-full text-[11px] border border-slate-800">
+          <thead class="bg-slate-900 text-slate-400">
+            <tr><th class="p-1.5 border border-slate-800">Tract</th><th class="p-1.5 border border-slate-800">In-County Dist</th><th class="p-1.5 border border-slate-800">Cross-Border Dist</th><th class="p-1.5 border border-slate-800">Nearest Statewide Clinic</th></tr>
+          </thead>
+          <tbody>
+            ${cbExamples.slice(0, 5).map(e => `
+              <tr class="border-t border-slate-800">
+                <td class="p-1.5 font-mono text-sky-300">${e.geo_id}</td>
+                <td class="p-1.5 text-rose-300">${e.km_to_county_safety_net} km</td>
+                <td class="p-1.5 text-emerald-300 font-bold">${e.km_to_statewide_safety_net} km</td>
+                <td class="p-1.5 text-slate-300">${e.nearest_statewide_safety_net_name} (${e.nearest_statewide_safety_net_city})</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      const sFacs = DASHBOARD.access_summary.federal_hpsa_findings.shortage_facilities || [];
+      document.getElementById('part2ShortageFacilities').innerHTML = sFacs.map(f => `
+        <div class="p-1.5 rounded bg-slate-900 border border-slate-800 flex items-center justify-between">
+          <span><strong>${f.HPSA_NM}</strong> (${f.HPSA_TYP_DESC} · ${f.CITY})</span>
+          <span class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono">HPSA Score ${f.HPSA_SCORE}</span>
+        </div>
+      `).join('');
+
+      // Part 3: Equity Comparison Bars & Stop Demographics Table
+      const eq = DASHBOARD.pass2_audit.post_hoc_equity_and_demographic_audit.plan_vs_county_baseline;
+      const metrics = [
+        { label: "Racial/Ethnic Minority Population (%)", plan: eq.plan_weighted_pct_minority, base: eq.county_baseline_pct_minority, unit: "%" },
+        { label: "Black / African American Population (%)", plan: eq.plan_weighted_pct_black, base: eq.county_baseline_pct_black, unit: "%" },
+        { label: "Hispanic / Latino Population (%)", plan: eq.plan_weighted_pct_hispanic, base: eq.county_baseline_pct_hispanic, unit: "%" },
+        { label: "SVI Theme 3 Minority Percentile (x100)", plan: +(eq.plan_weighted_svi_theme3_pctile * 100).toFixed(1), base: +(eq.county_baseline_svi_theme3_pctile * 100).toFixed(1), unit: " pctile" },
+        { label: "Below Federal Poverty Line (ACS %)", plan: eq.plan_weighted_pct_poverty, base: eq.county_baseline_pct_poverty, unit: "%" },
+        { label: "Households With Zero Vehicles (SVI %)", plan: eq.mean_no_vehicle_in_plan, base: eq.county_baseline_no_vehicle, unit: "%" }
+      ];
+      document.getElementById('equityComparisonBars').innerHTML = metrics.map(m => `
+        <div class="space-y-1 text-xs">
+          <div class="flex justify-between">
+            <span class="text-slate-300 font-medium">${m.label}</span>
+            <span class="font-bold text-emerald-400">Plan: ${m.plan}${m.unit} <span class="text-slate-400 font-normal">vs County: ${m.base}${m.unit}</span></span>
+          </div>
+          <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden flex">
+            <div class="bg-emerald-500 h-2.5 rounded-full" style="width: ${Math.min(100, m.plan)}%"></div>
+          </div>
+        </div>
+      `).join('');
+
+      const stopDiags = DASHBOARD.pass2_audit.post_hoc_equity_and_demographic_audit.stop_by_stop_diagnostics || [];
+      document.getElementById('stopDemographicsTable').innerHTML = `
+        <table class="w-full text-xs border border-slate-800">
+          <thead class="bg-slate-900 text-slate-300">
+            <tr>
+              <th class="p-2 border border-slate-800">Tract & Corridor</th>
+              <th class="p-2 border border-slate-800">SVI Theme 3</th>
+              <th class="p-2 border border-slate-800">% Minority</th>
+              <th class="p-2 border border-slate-800">% Black</th>
+              <th class="p-2 border border-slate-800">% Hispanic</th>
+              <th class="p-2 border border-slate-800">% Limited EN</th>
+              <th class="p-2 border border-slate-800">% Poverty</th>
+              <th class="p-2 border border-slate-800">Median Income</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stopDiags.map(d => `
+              <tr class="border-t border-slate-800">
+                <td class="p-2"><div class="font-mono text-emerald-400 font-bold">${d.geo_id}</div><div class="text-[11px] text-slate-400">${d.corridor_name}</div></td>
+                <td class="p-2 font-mono text-sky-300 font-bold">${d.svi_theme3_minority_pctile}</td>
+                <td class="p-2 font-bold text-white">${d.pct_minority}%</td>
+                <td class="p-2">${d.pct_black}%</td>
+                <td class="p-2 ${d.pct_hispanic >= 15 ? 'text-amber-300 font-bold' : ''}">${d.pct_hispanic}%</td>
+                <td class="p-2 ${d.pct_limited_english >= 3 ? 'text-amber-300 font-bold' : ''}">${d.pct_limited_english}%</td>
+                <td class="p-2 text-rose-300 font-semibold">${d.pct_poverty_acs}%</td>
+                <td class="p-2 font-mono">${d.acs_median_income ? ('$' + d.acs_median_income.toLocaleString()) : 'N/A'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      // Part 4: Bilingual Outreach Flyer Cards
+      document.getElementById('bilingualFlyerCards').innerHTML = BILINGUAL_FLYERS.map(f => `
+        <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div>
+              <span class="text-xs font-bold text-emerald-400">${f.saturday}</span>
+              <h4 class="text-sm font-bold text-white">${f.neighborhood}</h4>
+            </div>
+            <span class="px-2 py-0.5 text-[11px] bg-sky-500/20 text-sky-300 rounded">EN + ES · 6th Grade</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div class="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1.5">
+              <div class="font-bold text-sky-300">🇺🇸 ${f.en_title}</div>
+              <div class="text-[11px] text-slate-300"><strong>Where:</strong> ${f.landmark_en}<br/><strong>Transit:</strong> ${f.transit_en}</div>
+              <ul class="list-disc pl-4 space-y-0.5 text-[11px] text-slate-300">
+                ${f.en_bullets.map(b => `<li>${b}</li>`).join('')}
+              </ul>
+              <div class="pt-1">
+                <div class="text-[10px] text-slate-400 uppercase font-semibold">WhatsApp / SMS Copy:</div>
+                <div class="p-1.5 rounded bg-slate-950 text-[11px] text-emerald-300 font-mono mt-0.5">${f.en_sms}</div>
+              </div>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1.5">
+              <div class="font-bold text-amber-300">🇲🇽 ${f.es_title}</div>
+              <div class="text-[11px] text-slate-300"><strong>Dónde:</strong> ${f.landmark_en}<br/><strong>Transporte:</strong> ${f.transit_en}</div>
+              <ul class="list-disc pl-4 space-y-0.5 text-[11px] text-slate-300">
+                ${f.es_bullets.map(b => `<li>${b}</li>`).join('')}
+              </ul>
+              <div class="pt-1">
+                <div class="text-[10px] text-slate-400 uppercase font-semibold">Mensaje de WhatsApp / SMS:</div>
+                <div class="p-1.5 rounded bg-slate-950 text-[11px] text-amber-200 font-mono mt-0.5">${f.es_sms}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      // Field reports list
+      const reports = (DASHBOARD.field_reports && DASHBOARD.field_reports.field_reports) || [];
+      document.getElementById('fieldReportsList').innerHTML = reports.map(r => `
+        <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-mono font-bold text-indigo-300">Tract ${r.geo_id} · ${r.barrier_type}</span>
+            <span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[11px]">Severity x${r.severity_adjustment}</span>
+          </div>
+          <div class="text-slate-300">${r.field_notes}</div>
+          <div class="text-[11px] text-slate-400">📍 Verified Host: ${r.verified_landmark} · By: ${r.reporter_role}</div>
+        </div>
+      `).join('');
+
+      // Cached ADK Agent Run Trace
+      if (DASHBOARD.cached_agent_run) {
+        const events = DASHBOARD.cached_agent_run.agent_events || [];
+        document.getElementById('agentEventTrace').innerHTML = events.map((ev, idx) => `
+          <div class="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-sky-400">#${idx + 1} · ${ev.author}</span>
+              <span class="text-[10px] text-slate-400">${ev.tool_calls && ev.tool_calls.length ? ('🔧 ' + ev.tool_calls.join(', ')) : (ev.tool_responses && ev.tool_responses.length ? ('📥 ' + ev.tool_responses.join(', ')) : '💬 LLM Synthesis')}</span>
+            </div>
+            ${ev.text ? `<div class="text-[11px] text-slate-300 line-clamp-3">${ev.text.substring(0, 260)}...</div>` : ''}
+          </div>
+        `).join('');
+
+        const st = DASHBOARD.cached_agent_run.session_state || {};
+        if (st.community_outreach) {
+          document.getElementById('agentOutreachMarkdown').innerHTML = marked.parse(String(st.community_outreach));
+        }
+        renderSelectedStateKey();
+      } else {
+        document.getElementById('agentEventTrace').innerHTML = `<div class="text-slate-400 p-3">Agent pipeline trace is initializing or can be triggered with "Re-Run Live ADK Multi-Agent Pipeline".</div>`;
+      }
+    }
+
+    function renderSelectedStateKey() {
+      if (!DASHBOARD || !DASHBOARD.cached_agent_run) return;
+      const key = document.getElementById('stateKeySelector').value;
+      const st = DASHBOARD.cached_agent_run.session_state || {};
+      const val = st[key];
+      const container = document.getElementById('stateKeyContent');
+      if (!val) {
+        container.innerHTML = `<div class="text-slate-400">No value stored for ${key}</div>`;
+      } else if (typeof val === 'string') {
+        container.innerHTML = marked.parse(val);
+      } else {
+        container.innerHTML = `<pre class="text-xs font-mono text-emerald-300 whitespace-pre-wrap">${JSON.stringify(val, null, 2)}</pre>`;
+      }
+    }
+
+    async function submitFieldReport() {
+      const btn = document.getElementById('submitFrBtn');
+      btn.disabled = true;
+      btn.innerText = "Logging to BigQuery a4i_health.field_reports...";
+      try {
+        const res = await fetch('/api/field-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            geo_id: document.getElementById('frGeoId').value,
+            reporter_role: document.getElementById('frRole').value,
+            barrier_type: "Field-Verified Transit & Access Barrier",
+            field_notes: document.getElementById('frNotes').value,
+            verified_landmark: document.getElementById('frLandmark').value,
+            severity_adjustment: parseFloat(document.getElementById('frSeverity').value || "1.2")
+          })
+        });
+        const data = await res.json();
+        DASHBOARD.pass2_plan = data.updated_pass2_plan;
+        DASHBOARD.pass2_audit = data.updated_pass2_audit;
+        DASHBOARD.field_reports = data.field_reports;
+        renderAllPanels();
+        updateMapOverlays();
+        btn.innerText = "✅ Logged to BigQuery & Siting Recomputed!";
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerText = "+ Log Field Report to BigQuery & Recompute Siting";
+        }, 2500);
+      } catch (err) {
+        alert("Failed to log field report: " + err);
+        btn.disabled = false;
+        btn.innerText = "+ Log Field Report to BigQuery & Recompute Siting";
+      }
+    }
+
+    async function runLiveAgentPipeline() {
+      const btn = document.getElementById('runAgentBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<span>⏳ Running 8-Agent ADK Pipeline on gemini-3.6-flash...</span>`;
+      try {
+        const res = await fetch('/api/run-agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const runData = await res.json();
+        DASHBOARD.cached_agent_run = runData;
+        renderAllPanels();
+        switchTab('tab-judge');
+        btn.innerHTML = `<span>✅ Live ADK Pipeline Completed!</span>`;
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerHTML = `<span>⚡ Re-Run Live ADK Multi-Agent Pipeline</span>`;
+        }, 3000);
+      } catch (err) {
+        alert("Error running pipeline: " + err);
+        btn.disabled = false;
+        btn.innerHTML = `<span>⚡ Re-Run Live ADK Multi-Agent Pipeline</span>`;
+      }
+    }
+
+    async function boot() {
+      initMap();
+      const res = await fetch('/api/dashboard-data');
+      DASHBOARD = await res.json();
+      renderTractLayer();
+      updateMapOverlays();
+      renderAllPanels();
+    }
+
+    boot();
+  </script>
+</body>
+</html>

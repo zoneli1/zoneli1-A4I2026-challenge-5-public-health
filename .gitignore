@@ -19,6 +19,10 @@ credentials.json
 .DS_Store
 Thumbs.db
 
+# ADK
+.adk/
+agent/.adk/
+
 # Local data
 *.parquet
 *.csv.gz
